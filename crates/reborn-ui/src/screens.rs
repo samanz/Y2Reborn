@@ -67,6 +67,7 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         | Screen::SettingsDisplay
         | Screen::Storage
         | Screen::Update => views_settings::screen(&mut c, ui, m, tracks, interactive),
+        Screen::Search => crate::search::draw(&mut c, ui, m, tracks, interactive),
         _ => views_system::page(&mut c, ui, m, tracks, interactive),
     }
     overlays(&mut c, ui, m, tracks);
@@ -258,6 +259,7 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::Maintenance => "Reset & maintenance".into(),
         Screen::Diagnostics => "Diagnostics".into(),
         Screen::DiagnosticSection => crate::diagnostics::title(&m.navigation.filter).into(),
+        Screen::Search => "Search".into(),
         Screen::ValueDetail | Screen::TextEntry | Screen::Pairing => "Reborn".into(),
     }
 }

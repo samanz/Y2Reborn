@@ -242,6 +242,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         m.playback = PlaybackState::Stopped;
         m.navigation.focus = 1;
     });
+    // Search, opened from its Home row.
+    let search = |ui: &mut Ui, m: &mut AppModel, query: &str| {
+        m.navigation.focus = 1;
+        ui.model_action(m, Action::Select);
+        ui.search.query = query.into();
+    };
+    case!("05b-search", at(Screen::Home, ""), move |ui, m| {
+        ui.accent = teal;
+        search(ui, m, "");
+    });
+    case!("05c-search-typing", at(Screen::Home, ""), move |ui, m| {
+        ui.accent = teal;
+        search(ui, m, "har");
+    });
+    case!("05d-search-results", at(Screen::Home, ""), move |ui, m| {
+        ui.accent = orange;
+        search(ui, m, "ha");
+        ui.model_action(m, Action::ContextMenu);
+        ui.model_action(m, Action::WheelClockwise(1));
+        ui.model_action(m, Action::WheelClockwise(1));
+    });
+    case!(
+        "05e-search-no-results",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            ui.accent = teal;
+            search(ui, m, "xq");
+        }
+    );
     case!("06-artists", at(Screen::Artists, ""), move |ui, m| {
         ui.accent = teal;
         m.navigation.focus = 2;

@@ -74,7 +74,8 @@ pub fn home(
     let rows = ui.rows(m, tracks);
     let focus = m.navigation.focus.min(rows.len().saturating_sub(1));
     let counts = ui.library_counts(tracks);
-    // Seven rows (with Genres) must still end above the screen's bottom edge.
+    // Eight rows (with Search and Genres) must still end above the screen's
+    // bottom edge.
     let step = (296. / rows.len().max(1) as f32).min(44.).floor();
     let mut y = 50.;
     for (i, row) in rows.iter().enumerate() {

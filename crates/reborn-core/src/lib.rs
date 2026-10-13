@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 pub mod platform;
+pub mod search;
 pub mod sort;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -368,6 +369,8 @@ pub enum Screen {
     ValueDetail,
     TextEntry,
     Pairing,
+    /// Music search: the typed query above live results.
+    Search,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

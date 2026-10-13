@@ -73,6 +73,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
     match m.screen {
         Screen::Home => Page::rows(vec![
             row("Now Playing", "now_playing", ""),
+            row("Search", "search", ""),
             row("Artists", "artists", ""),
             row("Albums", "albums", ""),
             row("Genres", "genres", ""),
@@ -81,6 +82,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             row("Settings", "settings", ""),
         ]),
         Screen::Music => Page::rows(vec![
+            Item::new("Search", "search"),
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),
             Item::new("Genres", "genres"),

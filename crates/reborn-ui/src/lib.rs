@@ -12,6 +12,7 @@ mod fontdata;
 mod maskdata;
 pub mod pages;
 mod screens;
+pub mod search;
 mod text;
 pub mod theme;
 mod views_coverflow;
@@ -263,6 +264,8 @@ pub struct Ui {
     pub collection_art: std::cell::Cell<Option<u64>>,
     /// The centre cover the last frame wants at full resolution.
     cover_request: std::cell::Cell<Option<(u64, usize)>>,
+    /// Search: the query, the ring and the index.
+    pub search: search::SearchView,
 }
 
 /// A dialog the player raises by itself.
@@ -757,6 +760,7 @@ impl Ui {
             Screen::DiagnosticSection => diagnostics::section_rows(m, &m.navigation.filter),
             Screen::ValueDetail => vec![Item::new("Back", "back")],
             Screen::TextEntry | Screen::Pairing => vec![],
+            Screen::Search => search::rows(self, tracks),
             _ => pages::page(self, m, tracks).rows,
         }
     }
@@ -771,6 +775,7 @@ impl Ui {
     }
     pub fn invalidate_catalog(&self) {
         self.catalog.borrow_mut().clear();
+        self.search.forget_index();
     }
     fn catalog_rows(&self, m: &AppModel, tracks: &[Track]) -> Vec<Item> {
         let mut c = self.catalog.borrow_mut();
@@ -1237,6 +1242,10 @@ impl Ui {
         if self.text_entry {
             return self.entry(action);
         }
+        // Search types with the wheel and Select until the results take over.
+        if let Some(effect) = self.search_action(m, tracks, action) {
+            return effect;
+        }
         match action {
             Action::Home => {
                 if m.navigation.modal.is_some() {
@@ -1449,6 +1458,10 @@ impl Ui {
         }
         if key == "shuffle:collection" {
             return self.play_filtered(m, tracks, true);
+        }
+        if key == "search" {
+            self.open_search(m);
+            return Effect::None;
         }
         if let Some(screen) = route(key) {
             Self::go(m, screen, "");

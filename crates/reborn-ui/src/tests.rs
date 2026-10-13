@@ -286,6 +286,7 @@ fn root_is_a_small_music_player_menu() {
         labels,
         [
             "Now Playing",
+            "Search",
             "Artists",
             "Albums",
             "Genres",
@@ -1640,7 +1641,7 @@ fn genres_open_their_albums_then_all_songs_or_one_album() {
 fn home_with_genres_fits_the_screen() {
     let ui = radios();
     let m = app(Screen::Home);
-    for focus in 0..7 {
+    for focus in 0..8 {
         let mut m = m.clone();
         m.navigation.focus = focus;
         let quads = ui.draw(&m, &m.library.tracks, false);
@@ -1838,4 +1839,264 @@ fn library_lists_sort_a_to_z_ignoring_case_accents_and_a_leading_article() {
     assert_eq!(initial("Émilie Simon", Screen::Artists), 'E');
     assert_eq!(initial("A Night at the Opera", Screen::Albums), 'N');
     assert_eq!(initial("1979", Screen::Tracks), '#');
+}
+
+fn search_library() -> Vec<Track> {
+    let song = |id: i64, title: &str, artist: &str, album: &str, n: u32| Track {
+        id,
+        source_id: "internal".into(),
+        path: format!("/data/music/{artist}/{album}/{n:02}.flac").into(),
+        filename: format!("{n:02} {title}.flac"),
+        title: title.into(),
+        artist: artist.into(),
+        album: album.into(),
+        album_artist: artist.into(),
+        track: n,
+        online: true,
+        ..Default::default()
+    };
+    vec![
+        song(1, "Such Great Heights", "The Postal Service", "Give Up", 2),
+        song(
+            2,
+            "The District Sleeps Alone Tonight",
+            "The Postal Service",
+            "Give Up",
+            1,
+        ),
+        song(3, "Creep", "Radiohead", "Pablo Honey", 2),
+        song(4, "Paranoid Android", "Radiohead", "OK Computer", 2),
+        song(5, "Airbag", "Radiohead", "OK Computer", 1),
+        song(6, "Heights", "Lowlands", "Cold Water", 1),
+    ]
+}
+
+/// Search opened from its Home row.
+fn open_search() -> (Ui, AppModel) {
+    let mut ui = radios();
+    let mut m = app(Screen::Home);
+    m.library.tracks = search_library();
+    m.navigation.focus = 1;
+    ui.model_action(&mut m, Action::Select);
+    assert_eq!(m.screen, Screen::Search);
+    assert!(!ui.search.results, "typing");
+    (ui, m)
+}
+
+/// Type `text` as a listener would: turn the ring to each character, Select.
+fn type_on_ring(ui: &mut Ui, m: &mut AppModel, text: &str) {
+    for ch in text.bytes() {
+        let want = match ch {
+            b' ' => search::Key::Space,
+            c => search::Key::Char(c),
+        };
+        for _ in 0..40 {
+            if ui.search.key() == want {
+                break;
+            }
+            ui.model_action(m, Action::WheelClockwise(1));
+        }
+        ui.model_action(m, Action::Select);
+    }
+}
+
+fn search_labels(ui: &Ui, m: &AppModel) -> Vec<String> {
+    ui.rows(m, &m.library.tracks)
+        .into_iter()
+        .map(|r| r.label)
+        .collect()
+}
+
+#[test]
+fn search_results_follow_every_character_typed() {
+    let (mut ui, mut m) = open_search();
+    assert!(search_labels(&ui, &m).is_empty(), "nothing typed yet");
+    type_on_ring(&mut ui, &mut m, "r");
+    assert!(search_labels(&ui, &m).contains(&"Radiohead".to_owned()));
+    type_on_ring(&mut ui, &mut m, "adio");
+    assert_eq!(ui.search.query, "radio");
+    // Grouped, the artist's albums and songs through their artist, A to Z.
+    assert_eq!(
+        search_labels(&ui, &m),
+        [
+            "Artists",
+            "Radiohead",
+            "Albums",
+            "OK Computer",
+            "Pablo Honey",
+            "Songs",
+            "Airbag",
+            "Creep",
+            "Paranoid Android"
+        ]
+    );
+    // Back deletes a character; the results widen again.
+    ui.model_action(&mut m, Action::Back);
+    assert_eq!(ui.search.query, "radi");
+    assert_eq!(m.screen, Screen::Search);
+    // The Play button stays the music's.
+    assert_eq!(
+        ui.model_action(&mut m, Action::PlayPause),
+        Effect::TogglePlayback
+    );
+}
+
+#[test]
+fn the_wheel_types_until_holding_select_moves_into_the_results_and_back() {
+    let (mut ui, mut m) = open_search();
+    type_on_ring(&mut ui, &mut m, "heights");
+    assert_eq!(
+        search_labels(&ui, &m),
+        ["Songs", "Heights", "Such Great Heights"]
+    );
+    // Holding Select moves into the results, on the first that can be
+    // chosen (a heading cannot).
+    ui.model_action(&mut m, Action::ContextMenu);
+    assert!(ui.search.results);
+    assert_eq!(m.navigation.focus, 1);
+    // Now the wheel moves through the results and types nothing...
+    ui.model_action(&mut m, Action::WheelClockwise(1));
+    assert_eq!(m.navigation.focus, 2);
+    assert_eq!(ui.search.query, "heights");
+    // ...and turning back past the first result returns to typing.
+    ui.model_action(&mut m, Action::WheelCounterClockwise(1));
+    ui.model_action(&mut m, Action::WheelCounterClockwise(1));
+    assert!(!ui.search.results);
+    // Done on the ring goes down too; Back comes up.
+    while ui.search.key() != search::Key::Done {
+        ui.model_action(&mut m, Action::WheelCounterClockwise(1));
+    }
+    ui.model_action(&mut m, Action::Select);
+    assert!(ui.search.results);
+    ui.model_action(&mut m, Action::Back);
+    assert!(!ui.search.results);
+    // Back deletes the query a letter at a time, then leaves.
+    for _ in 0.."heights".len() {
+        ui.model_action(&mut m, Action::Back);
+    }
+    assert_eq!((m.screen, ui.search.query.as_str()), (Screen::Search, ""));
+    ui.model_action(&mut m, Action::Back);
+    assert_eq!(m.screen, Screen::Home);
+}
+
+#[test]
+fn a_found_song_plays_its_album_from_that_song() {
+    let (mut ui, mut m) = open_search();
+    type_on_ring(&mut ui, &mut m, "paranoid");
+    ui.model_action(&mut m, Action::ContextMenu);
+    let rows = ui.rows(&m, &m.library.tracks);
+    assert_eq!(rows[m.navigation.focus].key, "track:3");
+    // Airbag opens OK Computer; Paranoid Android is its second song.
+    assert_eq!(
+        ui.model_action(&mut m, Action::Select),
+        Effect::PlayCollection {
+            selected: 3,
+            members: vec![4, 3],
+            shuffle: false
+        }
+    );
+    assert_eq!(m.screen, Screen::NowPlaying);
+}
+
+#[test]
+fn found_artists_and_albums_open_and_back_returns_to_the_results() {
+    let (mut ui, mut m) = open_search();
+    type_on_ring(&mut ui, &mut m, "radiohead");
+    ui.model_action(&mut m, Action::ContextMenu);
+    let focus = m.navigation.focus;
+    ui.model_action(&mut m, Action::Select);
+    assert_eq!(
+        (m.screen, m.navigation.filter.as_str()),
+        (Screen::Artist, "artist:Radiohead")
+    );
+    ui.model_action(&mut m, Action::Back);
+    assert_eq!((m.screen, m.navigation.focus), (Screen::Search, focus));
+    assert!(ui.search.results, "still in the results");
+    assert_eq!(ui.search.query, "radiohead");
+    // The first album, past the Albums heading.
+    ui.model_action(&mut m, Action::WheelClockwise(1));
+    ui.model_action(&mut m, Action::Select);
+    assert_eq!(
+        (m.screen, m.navigation.filter.as_str()),
+        (Screen::Album, "album:Radiohead\u{1f}OK Computer")
+    );
+    // A found song keeps its usual options.
+    ui.model_action(&mut m, Action::Back);
+    let rows = ui.rows(&m, &m.library.tracks);
+    m.navigation.focus = rows.iter().position(|r| r.key == "track:2").unwrap();
+    ui.model_action(&mut m, Action::ContextMenu);
+    let options: Vec<_> = ui
+        .modal_rows_public(&m, &m.library.tracks)
+        .into_iter()
+        .map(|r| r.label)
+        .collect();
+    assert_eq!(
+        options,
+        ["Play next", "Add to queue", "Go to album", "Go to artist"]
+    );
+}
+
+#[test]
+fn show_all_opens_a_group_and_back_closes_it() {
+    let (mut ui, mut m) = open_search();
+    for n in 0..12 {
+        let mut t = m.library.tracks[2].clone();
+        t.id = 100 + n;
+        t.title = format!("Creep {n}");
+        m.library.tracks.push(t);
+    }
+    type_on_ring(&mut ui, &mut m, "creep");
+    let rows = ui.rows(&m, &m.library.tracks);
+    assert_eq!(
+        (rows[0].label.as_str(), rows[0].secondary.as_str()),
+        ("Songs", "13")
+    );
+    assert_eq!(
+        rows.iter().filter(|r| r.key.starts_with("track:")).count(),
+        5
+    );
+    let more = rows.iter().position(|r| r.key == "more:songs").unwrap();
+    assert_eq!(rows[more].label, "Show all 13 songs");
+    ui.model_action(&mut m, Action::ContextMenu);
+    m.navigation.focus = more;
+    ui.model_action(&mut m, Action::Select);
+    let all = ui.rows(&m, &m.library.tracks);
+    assert_eq!(
+        all.iter().filter(|r| r.key.starts_with("track:")).count(),
+        13
+    );
+    assert!(!all.iter().any(|r| r.key.starts_with("more:")));
+    // Back closes the group first, then returns to typing.
+    ui.model_action(&mut m, Action::Back);
+    assert!(ui.search.results);
+    assert!(ui
+        .rows(&m, &m.library.tracks)
+        .iter()
+        .any(|r| r.key == "more:songs"));
+    ui.model_action(&mut m, Action::Back);
+    assert!(!ui.search.results);
+}
+
+#[test]
+fn search_draws_one_focus_while_typing_and_in_the_results() {
+    let (mut ui, mut m) = open_search();
+    let count = |ui: &Ui, m: &AppModel| focus_target_count(&ui.draw(m, &m.library.tracks, false));
+    assert_eq!(count(&ui, &m), 1, "the ring, nothing typed");
+    type_on_ring(&mut ui, &mut m, "zzz");
+    assert_eq!(count(&ui, &m), 1, "the ring, nothing found");
+    // With nothing found, holding Select stays on the ring.
+    ui.model_action(&mut m, Action::ContextMenu);
+    assert!(!ui.search.results);
+    ui.search.query = "r".into();
+    ui.model_action(&mut m, Action::ContextMenu);
+    assert!(ui.search.results);
+    for _ in 0..8 {
+        ui.model_action(&mut m, Action::WheelClockwise(1));
+        assert_eq!(count(&ui, &m), 1, "focus {}", m.navigation.focus);
+    }
+    // Every result row ends above the bottom edge.
+    let quads = ui.draw(&m, &m.library.tracks, false);
+    assert!(quads
+        .iter()
+        .all(|q| q.y + q.h <= crate::theme::HEIGHT + 0.5));
 }
