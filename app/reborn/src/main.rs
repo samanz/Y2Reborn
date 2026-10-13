@@ -2798,6 +2798,11 @@ fn run() -> Result<(), String> {
                     if artwork_matches_current(&rt.model, generation, entry_id, track_id) {
                         rt.ui.accent = reborn_ui::art::accent_from_rgba(&bytes);
                         if let Some(g) = &mut rt.graphics {
+                            // The blurred backdrop follows the cover, once
+                            // per cover.
+                            if let Some(blurred) = reborn_graphics::blur_backdrop(&bytes) {
+                                let _ = g.backdrop(&blurred);
+                            }
                             let mut rounded = bytes.to_vec();
                             reborn_ui::art::round_corners(&mut rounded, 160);
                             if g.artwork(&rounded).is_ok() {

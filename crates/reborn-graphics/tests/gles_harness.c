@@ -58,6 +58,16 @@ int main(int argc, char **argv) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   if (gl_setup(g, pages, heights, masks, mask_w, mask_h) < 0) { fputs("gl_setup failed\n", stderr); return 6; }
+  /* Extra glyph pages, when there are any. */
+  for (int n = 3; n < 3 + RB_EXTRA_PAGES; n++) {
+    snprintf(path, sizeof path, "%s/fonts/reborn-page%d.a8", argv[1], n);
+    FILE *probe = fopen(path, "rb");
+    if (!probe) break;
+    fclose(probe);
+    size_t size;
+    const uint8_t *page = slurp(path, &size);
+    if (rb_graphics_page(g, n, page, (int)(size / 1024)) < 0) return 11;
+  }
   rb_graphics_begin(g);
 
   FILE *quads = fopen(argv[2], "r");
@@ -85,6 +95,14 @@ int main(int argc, char **argv) {
         uint8_t *art = slurp(file, &size);
         if (rb_graphics_art(g, art, 1) < 0) return 8;
         free(art);
+      }
+    } else if (line[0] == 'B') {
+      char file[400];
+      if (sscanf(line + 1, "%399s", file) == 1) {
+        size_t size;
+        uint8_t *image = slurp(file, &size);
+        if (rb_graphics_backdrop(g, image, 40) < 0) return 10;
+        free(image);
       }
     } else if (line[0] == 'T') {
       int cx, cy;

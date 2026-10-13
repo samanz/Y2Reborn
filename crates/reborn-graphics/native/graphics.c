@@ -30,6 +30,10 @@ double rb_graphics_thread_cpu_seconds(void) {
   return t.tv_sec + t.tv_nsec / 1e9;
 }
 #include "splash-handoff.h"
+/* Texture slots (see RbGraphics.tex) and the extra glyph pages among them;
+ * keep in step with native.rs. */
+#define RB_TEXTURES 17
+#define RB_EXTRA_PAGES 8
 /* Floats per vertex: position xy, projective uv (u*q, v*q, q), tint rgba. */
 #define RB_VERTEX 9
 struct fb {
@@ -117,9 +121,10 @@ typedef struct {
   EGLContext context;
   /* Texture slots, in the order the product UI names them (see rb_graphics_quad):
    * 0 white, 1..3 glyph pages, 4 shape/icon masks, 5 artwork, 6 collection
-   * artwork, 7 thumbnail atlas. Every sampled size is kept for UV scaling. */
-  GLuint program, vbo, tex[8];
-  int tex_w[8], tex_h[8];
+   * artwork, 7 thumbnail atlas, 8 blurred backdrop, 9..16 extra glyph pages
+   * (made on first use). Every sampled size is kept for UV scaling. */
+  GLuint program, vbo, tex[RB_TEXTURES];
+  int tex_w[RB_TEXTURES], tex_h[RB_TEXTURES];
   struct flip flip;
   /* Bounded adjacent-texture batching, preserving the original draw order. */
   GLfloat vertices[256 * 6 * RB_VERTEX];
@@ -173,7 +178,7 @@ void rb_graphics_close(RbGraphics *g) {
       glDeleteProgram(g->program);
     if (g->vbo)
       glDeleteBuffers(1, &g->vbo);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < RB_TEXTURES; i++)
       if (g->tex[i])
         glDeleteTextures(1, &g->tex[i]);
   }
@@ -325,12 +330,15 @@ static int gl_setup(RbGraphics *g, const uint8_t *const font_pages[3],
   g->tex[7] = texture(RB_THUMB_W, RB_THUMB_H, NULL);
   g->tex_w[7] = RB_THUMB_W;
   g->tex_h[7] = RB_THUMB_H;
-  for (int i = 5; i < 8; i++) {
+  /* The blurred backdrop: replaced by rb_graphics_backdrop, stretched. */
+  g->tex[8] = texture(1, 1, white);
+  g->tex_w[8] = g->tex_h[8] = 1;
+  for (int i = 5; i < 9; i++) {
     glBindTexture(GL_TEXTURE_2D, g->tex[i]);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   }
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < 9; i++)
     if (!g->tex[i])
       return -EIO;
   if (glGetError() != GL_NO_ERROR)
@@ -500,13 +508,14 @@ void rb_graphics_begin(RbGraphics *g) {
   glClear(GL_COLOR_BUFFER_BIT);
 }
 /* `tex` selects the texture (0 white, 1..3 glyph pages, 4 masks, 5 artwork,
- * 6 collection artwork, 7 thumbnails); (sx, sy, sw, sh) is the source rectangle
- * in texels of a mask/glyph/thumbnail texture and is ignored otherwise. */
+ * 6 collection artwork, 7 thumbnails, 8 backdrop, 9..16 extra glyph pages);
+ * (sx, sy, sw, sh) is the source rectangle in texels of a mask/glyph/thumbnail
+ * texture and is ignored otherwise. */
 /* Texture-space source rectangle (u, v, uw, vh) for `tex`. */
 static void source_uv(RbGraphics *g, int tex, int sx, int sy, int sw, int sh,
                       float uv[4]) {
   uv[0] = 0; uv[1] = 0; uv[2] = 1; uv[3] = 1;
-  if ((tex >= 1 && tex <= 4) || tex == 7) {
+  if ((tex >= 1 && tex <= 4) || tex == 7 || tex >= 9) {
     uv[0] = (float)sx / g->tex_w[tex];
     uv[1] = (float)sy / g->tex_h[tex];
     uv[2] = (float)sw / g->tex_w[tex];
@@ -514,7 +523,7 @@ static void source_uv(RbGraphics *g, int tex, int sx, int sy, int sw, int sh,
   }
 }
 static int begin_quad(RbGraphics *g, int tex) {
-  if (tex < 0 || tex > 7)
+  if (tex < 0 || tex >= RB_TEXTURES || !g->tex[tex])
     return 0;
   GLuint t = g->tex[tex];
   if (g->vertices_used &&
@@ -591,6 +600,32 @@ void rb_graphics_quad(RbGraphics *g, float x, float y, float w, float h,
     const float *k = corners[order[i]];
     put_vertex(g, k[0], k[1], k[2], k[3], 1, color);
   }
+}
+/* Create extra glyph page `page` (3..) from 1024 x h coverage bytes, once:
+ * a typeface no frame uses costs no video memory. */
+int rb_graphics_page(RbGraphics *g, int page, const uint8_t *a8, int h) {
+  int t = 6 + page;
+  if (page < 3 || page >= 3 + RB_EXTRA_PAGES || h <= 0)
+    return -EINVAL;
+  if (g->tex[t])
+    return 0;
+  flush_batch(g);
+  g->tex[t] = mask_texture(1024, h, a8);
+  g->tex_w[t] = 1024;
+  g->tex_h[t] = h;
+  return g->tex[t] && glGetError() == GL_NO_ERROR ? 0 : -EIO;
+}
+/* Replace the blurred backdrop with a side x side RGBA image. */
+int rb_graphics_backdrop(RbGraphics *g, const uint8_t *rgba, int side) {
+  if (side <= 0 || side > 256)
+    return -EINVAL;
+  flush_batch(g);
+  glBindTexture(GL_TEXTURE_2D, g->tex[8]);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, side, side, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, rgba);
+  g->tex_w[8] = g->tex_h[8] = side;
+  return glGetError() == GL_NO_ERROR ? 0 : -EIO;
 }
 /* Upload one 98x98 RGBA thumbnail cell (a 96x96 image with a replicated
  * one-pixel gutter) at atlas cell (cx, cy). */

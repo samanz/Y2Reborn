@@ -62,6 +62,15 @@ def cover(seed: int, size: int = 160, rounded: float = 0.085) -> Image.Image:
     return im
 
 
+def blur_backdrop(image: Image.Image) -> Image.Image:
+    """reborn_graphics::blur_backdrop: a 4x4 box downsample of 160x160 art to
+    40x40, then two separable 7-tap box blurs, opaque."""
+    small = image.convert("RGB").resize((40, 40), Image.Resampling.BOX)
+    for _ in range(2):
+        small = small.filter(ImageFilter.BoxBlur(3))
+    return small.convert("RGBA")
+
+
 def solve(rows: list[list[float]], rhs: list[float]) -> list[float] | None:
     """Gaussian elimination for the 8x8 perspective system."""
     n = len(rhs)
@@ -83,8 +92,24 @@ class Rasterizer:
         self.regular = mask_page(root / "assets/fonts/reborn-regular.a8", 1024)
         self.semibold = mask_page(root / "assets/fonts/reborn-semibold.a8", 1024)
         self.fallback = mask_page(root / "assets/fonts/reborn-fallback.a8", 1024)
+        # Glyph pages by Tex::Font index: the three above, then any extra ones.
+        self.pages = [self.regular, self.semibold, self.fallback]
+        for n in range(3, 11):
+            path = root / f"assets/fonts/reborn-page{n}.a8"
+            if not path.exists():
+                break
+            self.pages.append(mask_page(path, 1024))
         self.masks = mask_page(root / "assets/icons/reborn-masks.a8", 512)
         self.covers: dict[int, Image.Image] = {}
+        self.backdrop = blur_backdrop(cover(0))
+
+    def backdrop_layer(self, w: int, h: int, tint: tuple) -> Image.Image:
+        """Tex::Backdrop stretched over w x h with linear filtering, tinted."""
+        layer = self.backdrop.resize((w, h), Image.Resampling.BILINEAR)
+        if tint[:3] != (255, 255, 255):
+            layer = ImageChops.multiply(layer, Image.new("RGBA", (w, h), tint[:3] + (255,)))
+        layer.putalpha(Image.new("L", (w, h), tint[3]))
+        return layer
 
     def cover_for(self, key: int, size: int) -> Image.Image:
         if key not in self.covers:
@@ -100,7 +125,9 @@ class Rasterizer:
             return self.cover_for(0, 160)
         if isinstance(tex, dict) and "Thumb" in tex:
             return self.cover_for(tex["Thumb"], 96)
-        page = (self.regular, self.semibold, self.fallback)[tex["Font"]] if isinstance(tex, dict) else self.masks
+        if tex == "Backdrop":
+            return self.backdrop
+        page = self.pages[tex["Font"]] if isinstance(tex, dict) else self.masks
         sx, sy, sw, sh = quad["src"]
         layer = Image.new("RGBA", (sw, sh), (255, 255, 255, 255))
         layer.putalpha(page.crop((sx, sy, sx + sw, sy + sh)))
@@ -152,9 +179,11 @@ class Rasterizer:
         elif isinstance(tex, dict) and "Thumb" in tex:
             layer = self.cover_for(tex["Thumb"], w).resize((w, h))
             layer.putalpha(ImageChops.multiply(layer.getchannel("A"), Image.new("L", (w, h), tint[3])))
+        elif tex == "Backdrop":
+            layer = self.backdrop_layer(w, h, tint)
         else:
             if isinstance(tex, dict) and "Font" in tex:
-                page = (self.regular, self.semibold, self.fallback)[tex["Font"]]
+                page = self.pages[tex["Font"]]
             else:
                 page = self.masks
             sx, sy, sw, sh = quad["src"]

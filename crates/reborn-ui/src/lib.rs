@@ -2136,6 +2136,7 @@ pub fn atlases() -> reborn_graphics::Atlases<'static> {
                 "/../../assets/fonts/reborn-fallback.a8"
             )),
         ],
+        extra_pages: Vec::new(),
         masks: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../assets/icons/reborn-masks.a8"

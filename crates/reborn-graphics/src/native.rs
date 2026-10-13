@@ -1,4 +1,7 @@
-use super::{Quad, Tex, FONT_PAGE_WIDTH, THUMB_CELL, THUMB_COLUMNS, THUMB_SIZE, THUMB_SLOTS};
+use super::{
+    Quad, Tex, BACKDROP_SIZE, EXTRA_FONT_PAGES, FONT_PAGE_WIDTH, THUMB_CELL, THUMB_COLUMNS,
+    THUMB_SIZE, THUMB_SLOTS,
+};
 use reborn_observability::{HealthState, Level, Observer};
 use serde_json::json;
 use std::{
@@ -48,6 +51,8 @@ unsafe extern "C" {
         sw: c_int,
         sh: c_int,
     );
+    fn rb_graphics_page(p: *mut c_void, page: c_int, a8: *const u8, h: c_int) -> c_int;
+    fn rb_graphics_backdrop(p: *mut c_void, rgba: *const u8, side: c_int) -> c_int;
     fn rb_graphics_thumb(p: *mut c_void, cx: c_int, cy: c_int, rgba: *const u8) -> c_int;
     fn rb_graphics_art(p: *mut c_void, b: *const u8, collection: c_int) -> c_int;
     fn rb_graphics_test(p: *mut c_void) -> c_int;
@@ -56,9 +61,11 @@ unsafe extern "C" {
     fn rb_graphics_sleep(p: *mut c_void, off: c_int) -> c_int;
 }
 /// Coverage-mask atlases, one byte per texel: three 1024-wide glyph pages
-/// (Regular, SemiBold, fallback) and the shape/icon page.
+/// (Regular, SemiBold, fallback), up to `EXTRA_FONT_PAGES` more for other
+/// typefaces (`Tex::Font(3..)`) and the shape/icon page.
 pub struct Atlases<'a> {
     pub font_pages: [&'a [u8]; 3],
+    pub extra_pages: Vec<&'a [u8]>,
     pub masks: &'a [u8],
     pub mask_size: (usize, usize),
 }
@@ -75,6 +82,9 @@ pub struct Renderer {
     missing: Vec<u64>,
     mask_size: (usize, usize),
     page_heights: [usize; 3],
+    /// Glyph pages 3.. and whether each is on the GPU yet: they go there the
+    /// first time a frame samples them.
+    extra_pages: Vec<(&'static [u8], bool)>,
 }
 #[derive(Clone, Copy)]
 struct ThumbSlot {
@@ -105,13 +115,21 @@ impl Renderer {
             .gauge("graphics_scanout_active", if off { 0.0 } else { 1.0 });
         Ok(())
     }
-    pub fn open(atlases: &Atlases, log: Observer) -> Result<Self, String> {
+    pub fn open(atlases: &Atlases<'static>, log: Observer) -> Result<Self, String> {
         let mut heights = [0 as c_int; 3];
         for (height, page) in heights.iter_mut().zip(atlases.font_pages) {
             if page.is_empty() || page.len() % FONT_PAGE_WIDTH != 0 {
                 return Err("font page dimensions".into());
             }
             *height = (page.len() / FONT_PAGE_WIDTH) as c_int;
+        }
+        if atlases.extra_pages.len() > EXTRA_FONT_PAGES
+            || atlases
+                .extra_pages
+                .iter()
+                .any(|page| page.is_empty() || page.len() % FONT_PAGE_WIDTH != 0)
+        {
+            return Err("extra font pages".into());
         }
         let (mask_w, mask_h) = atlases.mask_size;
         if mask_w == 0 || mask_h == 0 || atlases.masks.len() != mask_w * mask_h {
@@ -174,6 +192,11 @@ impl Renderer {
             missing: Vec::new(),
             mask_size: atlases.mask_size,
             page_heights: heights.map(|h| h as usize),
+            extra_pages: atlases
+                .extra_pages
+                .iter()
+                .map(|page| (*page, false))
+                .collect(),
         })
     }
     pub fn render(&mut self, quads: &[Quad]) -> Result<(), String> {
@@ -193,6 +216,11 @@ impl Renderer {
         if quads.len() > 20000 {
             return Err("draw list exceeds limit".into());
         }
+        for q in quads {
+            if let Tex::Font(page) = q.tex {
+                self.ensure_page(usize::from(page))?;
+            }
+        }
         self.frame += 1;
         self.missing.clear();
         let start = Instant::now();
@@ -203,10 +231,12 @@ impl Renderer {
             for q in quads {
                 let (tex, src) = match q.tex {
                     Tex::Solid => (0, [0; 4]),
-                    Tex::Font(page) => (1 + c_int::from(page), q.src),
+                    Tex::Font(page) if page < 3 => (1 + c_int::from(page), q.src),
+                    Tex::Font(page) => (6 + c_int::from(page), q.src),
                     Tex::Mask => (4, q.src),
                     Tex::Art => (5, [0; 4]),
                     Tex::CollectionArt => (6, [0; 4]),
+                    Tex::Backdrop => (8, [0; 4]),
                     Tex::Thumb(key) => match self.thumbs.get_mut(&key) {
                         Some(slot) => {
                             slot.used = self.frame;
@@ -305,13 +335,43 @@ impl Renderer {
         let [x, y, w, h] = q.src.map(usize::from);
         let inside = |width: usize, height: usize| x + w <= width && y + h <= height;
         match q.tex {
-            Tex::Font(page) => {
-                usize::from(page) < 3
-                    && inside(FONT_PAGE_WIDTH, self.page_heights[usize::from(page)])
-            }
+            Tex::Font(page @ 0..3) => inside(FONT_PAGE_WIDTH, self.page_heights[usize::from(page)]),
+            Tex::Font(page) => self
+                .extra_pages
+                .get(usize::from(page) - 3)
+                .is_some_and(|(bytes, _)| inside(FONT_PAGE_WIDTH, bytes.len() / FONT_PAGE_WIDTH)),
             Tex::Mask => inside(self.mask_size.0, self.mask_size.1),
             _ => true,
         }
+    }
+    /// Put extra glyph page `page` (3..) on the GPU unless it is there.
+    fn ensure_page(&mut self, page: usize) -> Result<(), String> {
+        let Some((bytes, uploaded)) = page
+            .checked_sub(3)
+            .and_then(|i| self.extra_pages.get_mut(i))
+        else {
+            return Ok(());
+        };
+        if *uploaded {
+            return Ok(());
+        }
+        let height = bytes.len() / FONT_PAGE_WIDTH;
+        // SAFETY: the page holds exactly 1024 x height bytes (checked in
+        // open); GL copies them before returning, on the owning UI thread.
+        let r = unsafe {
+            rb_graphics_page(
+                self.raw.as_ptr(),
+                page as c_int,
+                bytes.as_ptr(),
+                height as c_int,
+            )
+        };
+        if r < 0 {
+            return Err(format!("glyph page {page} upload {r}"));
+        }
+        *uploaded = true;
+        self.log.add("glyph_page_uploads", 1.);
+        Ok(())
     }
     /// Library thumbnails the last frame wanted but that are not resident,
     /// in draw order. The caller loads them and calls `upload_thumb`.
@@ -385,6 +445,22 @@ impl Renderer {
     }
     pub fn artwork(&mut self, rgba: &[u8]) -> Result<(), String> {
         self.upload_art(rgba, false)
+    }
+    /// Replace the `Tex::Backdrop` image: `BACKDROP_SIZE` square RGBA, as
+    /// made by [`crate::blur_backdrop`].
+    pub fn backdrop(&mut self, rgba: &[u8]) -> Result<(), String> {
+        if rgba.len() != BACKDROP_SIZE * BACKDROP_SIZE * 4 {
+            return Err("backdrop dimensions".into());
+        }
+        // SAFETY: exact RGBA dimensions validated; GL copies the slice synchronously.
+        let r = unsafe {
+            rb_graphics_backdrop(self.raw.as_ptr(), rgba.as_ptr(), BACKDROP_SIZE as c_int)
+        };
+        if r < 0 {
+            Err(format!("backdrop upload {r}"))
+        } else {
+            Ok(())
+        }
     }
     pub fn collection_artwork(&mut self, rgba: &[u8]) -> Result<(), String> {
         self.upload_art(rgba, true)

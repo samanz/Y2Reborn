@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_previews import HEIGHT, WIDTH, Rasterizer  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-TEX = {"Solid": 0, "Mask": 4, "Art": 5, "CollectionArt": 6}
+TEX = {"Solid": 0, "Mask": 4, "Art": 5, "CollectionArt": 6, "Backdrop": 8}
 
 
 def cell_bytes(image: Image.Image) -> bytes:
@@ -53,9 +53,14 @@ def render_native(harness: Path, raster: Rasterizer, quads: list[dict], work: Pa
             index = cells[key]
             kind, src = 7, [index % 10 * 98 + 1, index // 10 * 98 + 1, 96, 96]
         elif isinstance(tex, dict) and "Font" in tex:
-            kind, src = 1 + tex["Font"], q["src"]
+            page = tex["Font"]
+            kind, src = (1 + page if page < 3 else 6 + page), q["src"]
         else:
             kind, src = TEX[tex], q.get("src", [0, 0, 0, 0])
+            if kind == 8 and not any(line.startswith("B ") for line in lines):
+                path = work / "backdrop.rgba"
+                path.write_bytes(raster.backdrop.tobytes())
+                lines.insert(0, f"B {path}")
             if kind == 5 and not art:
                 path = work / "art.rgba"
                 path.write_bytes(raster.cover_for(0, 160).tobytes())
