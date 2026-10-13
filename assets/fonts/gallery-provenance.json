@@ -1,0 +1,186 @@
+{
+  "families": {
+    "DM Sans 500": {
+      "file": "DMSans[opsz,wght].ttf",
+      "sha256": "8cd08d97e89c24d0aa92edd2f0f4c8ee6195eee9b7c9f154865a58b02f0c1c0d",
+      "axes": {
+        "opsz": 14.0,
+        "wght": 500.0
+      },
+      "license": "SIL Open Font License 1.1 (assets/fonts/DMSans-OFL.txt)"
+    },
+    "DM Sans 700": {
+      "file": "DMSans[opsz,wght].ttf",
+      "sha256": "8cd08d97e89c24d0aa92edd2f0f4c8ee6195eee9b7c9f154865a58b02f0c1c0d",
+      "axes": {
+        "opsz": 14.0,
+        "wght": 700.0
+      },
+      "license": "SIL Open Font License 1.1 (assets/fonts/DMSans-OFL.txt)"
+    },
+    "Syne 800": {
+      "file": "Syne[wght].ttf",
+      "sha256": "ce5ac77142a65cab2248a1a2ebb740b1d4d9c20b52488877d3ff664d1356104a",
+      "axes": {
+        "wght": 800.0
+      },
+      "license": "SIL Open Font License 1.1 (assets/fonts/Syne-OFL.txt)"
+    },
+    "IBM Plex Mono Medium": {
+      "file": "IBMPlexMono-Medium.ttf",
+      "sha256": "a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755",
+      "axes": {},
+      "license": "SIL Open Font License 1.1 (assets/fonts/IBMPlexMono-OFL.txt)"
+    }
+  },
+  "source": "github.com/google/fonts ofl/dmsans, ofl/syne, ofl/ibmplexmono; build input only",
+  "sets": {
+    "DM12": {
+      "page": 3,
+      "px": 12,
+      "font": "DM Sans 500",
+      "glyphs": 314,
+      "cell": [
+        18,
+        19
+      ]
+    },
+    "DM13": {
+      "page": 3,
+      "px": 13,
+      "font": "DM Sans 500",
+      "glyphs": 314,
+      "cell": [
+        19,
+        20
+      ]
+    },
+    "DM14": {
+      "page": 3,
+      "px": 14,
+      "font": "DM Sans 500",
+      "glyphs": 314,
+      "cell": [
+        20,
+        21
+      ]
+    },
+    "DM15": {
+      "page": 3,
+      "px": 15,
+      "font": "DM Sans 500",
+      "glyphs": 314,
+      "cell": [
+        21,
+        22
+      ]
+    },
+    "DM16": {
+      "page": 3,
+      "px": 16,
+      "font": "DM Sans 500",
+      "glyphs": 314,
+      "cell": [
+        22,
+        24
+      ]
+    },
+    "DMB14": {
+      "page": 3,
+      "px": 14,
+      "font": "DM Sans 700",
+      "glyphs": 314,
+      "cell": [
+        20,
+        21
+      ]
+    },
+    "DMB17": {
+      "page": 4,
+      "px": 17,
+      "font": "DM Sans 700",
+      "glyphs": 314,
+      "cell": [
+        23,
+        25
+      ]
+    },
+    "SY20": {
+      "page": 4,
+      "px": 20,
+      "font": "Syne 800",
+      "glyphs": 196,
+      "cell": [
+        47,
+        27
+      ]
+    },
+    "SY23": {
+      "page": 4,
+      "px": 23,
+      "font": "Syne 800",
+      "glyphs": 196,
+      "cell": [
+        52,
+        31
+      ]
+    },
+    "SY26": {
+      "page": 5,
+      "px": 26,
+      "font": "Syne 800",
+      "glyphs": 196,
+      "cell": [
+        59,
+        34
+      ]
+    },
+    "SY34": {
+      "page": 5,
+      "px": 34,
+      "font": "Syne 800",
+      "glyphs": 95,
+      "cell": [
+        67,
+        39
+      ]
+    },
+    "PM10": {
+      "page": 5,
+      "px": 10,
+      "font": "IBM Plex Mono Medium",
+      "glyphs": 196,
+      "cell": [
+        9,
+        16
+      ]
+    },
+    "PM11": {
+      "page": 5,
+      "px": 11,
+      "font": "IBM Plex Mono Medium",
+      "glyphs": 330,
+      "cell": [
+        12,
+        17
+      ]
+    },
+    "PM12": {
+      "page": 5,
+      "px": 12,
+      "font": "IBM Plex Mono Medium",
+      "glyphs": 196,
+      "cell": [
+        11,
+        18
+      ]
+    }
+  },
+  "page_heights": [
+    856,
+    816,
+    840
+  ],
+  "supersample": 4,
+  "runtime_font_files": false
+}

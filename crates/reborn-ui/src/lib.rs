@@ -9,6 +9,7 @@ mod components;
 pub mod diagnostics;
 mod flow;
 mod fontdata;
+mod galleryfonts;
 mod look;
 mod maskdata;
 pub mod pages;
@@ -2136,7 +2137,7 @@ pub fn atlases() -> reborn_graphics::Atlases<'static> {
                 "/../../assets/fonts/reborn-fallback.a8"
             )),
         ],
-        extra_pages: Vec::new(),
+        extra_pages: galleryfonts::PAGES.to_vec(),
         masks: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../assets/icons/reborn-masks.a8"

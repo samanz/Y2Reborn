@@ -21,6 +21,9 @@ pub enum Face {
     S25,
     S28,
     S36,
+    /// One of the Gallery look's typefaces (`galleryfonts::SETS`), named by
+    /// the constants `Face::DM14`, `Face::SY26` and so on.
+    Gallery(u8),
 }
 
 pub const FALLBACK_PX: f32 = 24.;
@@ -52,6 +55,7 @@ impl Face {
             Self::S25 => &S25,
             Self::S28 => &S28,
             Self::S36 => &S36,
+            Self::Gallery(i) => &crate::galleryfonts::SETS[usize::from(i)],
         }
     }
     pub fn px(self) -> f32 {
@@ -202,5 +206,18 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines.iter().all(|l| width(Face::S25, l) <= 220.));
         assert_eq!(fit(Face::R15, "Short", 200.), "Short");
+    }
+
+    #[test]
+    fn gallery_faces_draw_from_their_own_pages() {
+        for face in [Face::DM14, Face::DMB17, Face::SY26, Face::PM11] {
+            let set = face.own_set();
+            assert!(set.page >= 3, "{face:?}");
+            assert!(matches!(lookup(face, 'a'), Some(Source::Exact(_))));
+        }
+        assert!(matches!(lookup(Face::DM14, 'ł'), Some(Source::Exact(_))));
+        // The largest title face is ASCII only; the rest falls back.
+        assert!(matches!(lookup(Face::SY34, 'é'), Some(Source::Fallback(_))));
+        assert!(width(Face::DM13, "Gallery") < width(Face::DM16, "Gallery"));
     }
 }
