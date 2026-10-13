@@ -8,6 +8,8 @@ mod graphics_recovery;
 mod news;
 mod performance;
 mod playback;
+mod retro;
+mod retro_audio;
 mod volume;
 mod weather;
 use reborn_control::{Command, PlaybackAction, Response};
@@ -93,6 +95,8 @@ struct Runtime {
     wifi_idle_failed: bool,
     /// Doom: the engine process while a game runs.
     doom: doom::Doom,
+    /// Retro games: the frontend process and the game's sound.
+    retro: retro::Retro,
 }
 
 fn sleep_control_allowed(command: &Command) -> bool {
@@ -572,6 +576,10 @@ impl Runtime {
         }
     }
     fn load(&mut self) -> Result<(), String> {
+        // A retro game has the audio output until it ends.
+        if self.retro.holds_audio() {
+            return Err("a game is using the sound".into());
+        }
         // Restore coordinator-owned cores before decoder/device startup.
         self.playback_hints
             .publish(reborn_platform::workload::playback_class(
@@ -1533,6 +1541,9 @@ impl Runtime {
             }
             Effect::DoomStart(iwad) => self.doom_start(iwad),
             Effect::DoomStop => self.doom_stop(),
+            Effect::RetroStart(launch) => self.retro_start(launch),
+            Effect::RetroStop => self.retro_stop(),
+            Effect::RetroCommand(command) => self.retro_command(command),
         };
         Ok(())
     }
@@ -2034,10 +2045,16 @@ impl Runtime {
     }
 }
 impl Runtime {
-    /// The shortest gap between two frames now: Doom's 35 tics a second need
-    /// more than the UI's usual 34 ms.
+    /// The shortest gap between two frames now: a retro game's 60 pictures
+    /// and Doom's 35 tics a second need more than the UI's usual 34 ms.
     fn render_gap(&self) -> Duration {
-        Duration::from_millis(if self.doom.playing() { 27 } else { 34 })
+        Duration::from_millis(if self.retro.playing() {
+            15
+        } else if self.doom.playing() {
+            27
+        } else {
+            34
+        })
     }
 }
 
@@ -2665,10 +2682,15 @@ fn run() -> Result<(), String> {
         wifi_idle_off: false,
         wifi_idle_failed: false,
         doom: Default::default(),
+        retro: Default::default(),
     };
     rt.ui.news.feeds = news::feeds(&rt.model.sources);
     // The game engines are separate programs the system may not have.
     rt.ui.doom.installed = reborn_platform::doom::binary().is_some();
+    rt.ui.retro.installed = reborn_platform::retro::binary().is_some()
+        && reborn_core::retro::System::ALL
+            .into_iter()
+            .any(|system| reborn_platform::retro::core(system).is_some());
     startup_phase(&log, process_started, "runtime_ready");
     let last_snapshot = Arc::new(Mutex::new(json!({"starting":true})));
     let watcher = last_snapshot.clone();
@@ -2760,6 +2782,7 @@ fn run() -> Result<(), String> {
         .ok()
     };
     rt.doom.wake = server.notifier().ok();
+    rt.retro.wake = server.notifier().ok();
     let mut player_publish = Instant::now() - Duration::from_secs(1);
     let mut platform_refresh = Instant::now() - Duration::from_secs(30);
     let mut last_platform_screen = rt.model.screen;
@@ -2912,6 +2935,7 @@ fn run() -> Result<(), String> {
         rt.pump_weather();
         rt.pump_news();
         rt.pump_doom();
+        rt.pump_retro();
         log.heartbeat("ui", 10);
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
@@ -2953,6 +2977,11 @@ fn run() -> Result<(), String> {
                 // While Doom is on screen its buttons are held keys, so they
                 // go to the engine as pressed and released.
                 if rt.doom_input(&event) {
+                    continue;
+                }
+                // So are a retro game's (Power still reaches Reborn: the
+                // game menu).
+                if rt.retro_input(&event) {
                     continue;
                 }
                 if !rt.model.screen_off {
@@ -3767,6 +3796,18 @@ fn run() -> Result<(), String> {
         // gap is drawn as soon as the gap is over.
         let interval = if rt.doom.playing() && rt.dirty.render {
             interval.min(rt.render_gap().saturating_sub(render_time.elapsed()))
+        } else {
+            interval
+        };
+        // A retro game's held buttons and ring turns are timed here: wake
+        // often enough for them, and draw a waiting picture on time.
+        let interval = if rt.retro.playing() {
+            let gap = rt.render_gap();
+            interval.min(if rt.dirty.render {
+                gap.saturating_sub(render_time.elapsed())
+            } else {
+                gap
+            })
         } else {
             interval
         };

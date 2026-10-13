@@ -51,6 +51,7 @@ unsafe extern "C" {
     fn rb_graphics_thumb(p: *mut c_void, cx: c_int, cy: c_int, rgba: *const u8) -> c_int;
     fn rb_graphics_art(p: *mut c_void, b: *const u8, collection: c_int) -> c_int;
     fn rb_graphics_picture(p: *mut c_void, rgba: *const u8, w: c_int, h: c_int) -> c_int;
+    fn rb_graphics_picture_filter(p: *mut c_void, nearest: c_int) -> c_int;
     fn rb_graphics_test(p: *mut c_void) -> c_int;
     fn rb_graphics_readback(p: *mut c_void, pixels: *mut u8) -> c_int;
     fn rb_graphics_present(p: *mut c_void) -> c_int;
@@ -419,6 +420,18 @@ impl Renderer {
         };
         if r < 0 {
             Err(format!("picture upload {r}"))
+        } else {
+            Ok(())
+        }
+    }
+    /// Sample `Tex::Picture` sharply (`nearest`, for whole-pixel scales) or
+    /// smoothly (the default).
+    pub fn picture_filter(&mut self, nearest: bool) -> Result<(), String> {
+        // SAFETY: a sampler change on the texture this renderer owns, on its
+        // own UI thread.
+        let r = unsafe { rb_graphics_picture_filter(self.raw.as_ptr(), c_int::from(nearest)) };
+        if r < 0 {
+            Err(format!("picture filter {r}"))
         } else {
             Ok(())
         }

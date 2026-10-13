@@ -1,0 +1,20 @@
+[package]
+name = "reborn-retro"
+version.workspace = true
+edition.workspace = true
+# MIT like Reborn: the libretro API it implements is MIT too. The cores it
+# loads (installed by the image, each under its own licence) are separate
+# shared libraries opened at run time; none is part of this repository.
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "reborn-retro"
+path = "src/main.rs"
+
+[dependencies]
+libc.workspace = true
+reborn-core = { path = "../../crates/reborn-core" }
+
+[dev-dependencies]
+reborn-platform = { path = "../../crates/reborn-platform" }

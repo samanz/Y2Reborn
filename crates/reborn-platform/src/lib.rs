@@ -12,6 +12,7 @@ pub mod kernel_events;
 mod native;
 pub mod news;
 pub mod power;
+pub mod retro;
 pub mod storage;
 pub mod weather;
 pub mod wifi;

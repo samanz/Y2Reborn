@@ -624,6 +624,15 @@ int rb_graphics_picture(RbGraphics *g, const uint8_t *rgba, int w, int h) {
   g->tex_h[8] = h;
   return glGetError() == GL_NO_ERROR ? 0 : -EIO;
 }
+/* Sample the picture sharply (a game at a whole-pixel scale) or smoothly
+ * (the default). */
+int rb_graphics_picture_filter(RbGraphics *g, int nearest) {
+  GLint f = nearest ? GL_NEAREST : GL_LINEAR;
+  glBindTexture(GL_TEXTURE_2D, g->tex[8]);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
+  return glGetError() == GL_NO_ERROR ? 0 : -EIO;
+}
 int rb_graphics_art(RbGraphics *g, const uint8_t *p, int collection) {
   glBindTexture(GL_TEXTURE_2D, collection ? g->tex[6] : g->tex[5]);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 160, 160, 0, GL_RGBA,

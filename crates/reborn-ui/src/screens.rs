@@ -47,6 +47,8 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
     match m.screen {
         // The game has the whole screen; the buttons are its own.
         Screen::Doom if ui.doom.playing(m) => crate::doom::draw(&mut c, &ui.doom),
+        Screen::RetroGame if ui.retro.in_session(m) => crate::retro::draw_game(&mut c, &ui.retro),
+        Screen::RetroMenu if ui.retro.in_session(m) => crate::retro::draw_menu(&mut c, ui, m),
         Screen::NowPlaying if m.current().is_some() => {
             views_playing::now_playing(&mut c, ui, m, tracks, has_art, interactive)
         }
@@ -281,6 +283,11 @@ pub fn screen_title(m: &AppModel) -> String {
             .map_or("Games", |k| k.title())
             .into(),
         Screen::Doom => "Doom".into(),
+        Screen::Retro
+        | Screen::RetroRoms
+        | Screen::RetroGame
+        | Screen::RetroMenu
+        | Screen::RetroControls => crate::retro::title(&crate::retro::RetroView::default(), m),
     }
 }
 

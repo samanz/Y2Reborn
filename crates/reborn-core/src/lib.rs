@@ -3,6 +3,7 @@ pub mod cities;
 pub mod doom;
 pub mod news;
 pub mod platform;
+pub mod retro;
 pub mod weather;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -391,6 +392,16 @@ pub enum Screen {
     /// Games > Doom (only with the engine installed): the games found (a
     /// picker), then the game itself.
     Doom,
+    /// Games > Retro games: the systems.
+    Retro,
+    /// A system's games; the navigation filter holds the system's key.
+    RetroRoms,
+    /// A retro game playing (full screen).
+    RetroGame,
+    /// The game menu over the paused game (Power during play).
+    RetroMenu,
+    /// A system's (or one game's) controls; the filter names the layout.
+    RetroControls,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -699,6 +710,12 @@ pub enum Effect {
     DoomStart(PathBuf),
     /// Doom: leave the game (the engine quits).
     DoomStop,
+    /// Retro games: start the frontend on this game.
+    RetroStart(retro::Launch),
+    /// Retro games: save and quit the game.
+    RetroStop,
+    /// Retro games: something from the game menu.
+    RetroCommand(retro::Command),
 }
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {

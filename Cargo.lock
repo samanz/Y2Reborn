@@ -308,6 +308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "reborn-retro"
+version = "0.3.0"
+dependencies = [
+ "libc",
+ "reborn-core",
+ "reborn-platform",
+]
+
+[[package]]
 name = "reborn-ui"
 version = "0.3.0"
 dependencies = [

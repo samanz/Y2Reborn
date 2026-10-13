@@ -107,7 +107,12 @@ fn y2_specific_access_stays_behind_the_platform_client() {
     let mut violations = vec![];
     for file in files {
         let name = relative(&file);
-        if name.starts_with("crates/reborn-platform/") || name.starts_with("app/reborn/tests/") {
+        // reborn-retro's tests build a stand-in libretro core with the host
+        // C compiler; they are not part of any program.
+        if name.starts_with("crates/reborn-platform/")
+            || name.starts_with("app/reborn/tests/")
+            || name.starts_with("app/reborn-retro/tests/")
+        {
             continue;
         }
         let text = fs::read_to_string(&file).unwrap();

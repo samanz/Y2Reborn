@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "app/reborn"]
+members = ["crates/*", "app/reborn", "app/reborn-retro"]
 
 [workspace.package]
 version = "0.3.0"

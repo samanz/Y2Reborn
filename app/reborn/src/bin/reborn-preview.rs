@@ -873,6 +873,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.model_action(m, Action::Select);
         ui.doom.frame = true;
     });
+    // Retro games: only with the frontend and a core installed.
+    let retro = |ui: &mut Ui| {
+        use reborn_core::retro::System;
+        use reborn_ui::retro::SystemRow;
+        ui.doom.installed = true;
+        ui.retro.installed = true;
+        ui.retro.systems = System::ALL
+            .into_iter()
+            .map(|system| SystemRow {
+                system,
+                games: match system {
+                    System::Gba => 3,
+                    System::Snes => 1,
+                    _ => 0,
+                },
+                core: system != System::Arcade,
+            })
+            .collect();
+        ui.retro.roms = [
+            "Alpha Quest (USA).gba",
+            "Beta Racer (Europe) (Rev 1).gba",
+            "gamma.gba",
+        ]
+        .iter()
+        .filter_map(|f| {
+            reborn_core::retro::rom(System::Gba, format!("/media/sd/Games/GBA/{f}").into())
+        })
+        .collect();
+    };
+    case!("53m-games-retro", at(Screen::Games, ""), move |ui, m| {
+        retro(ui);
+        m.navigation.focus = 3;
+    });
+    case!("53n-retro-systems", at(Screen::Retro, ""), move |ui, m| {
+        retro(ui);
+        m.navigation.focus = 2;
+    });
+    case!(
+        "53o-retro-games",
+        at(Screen::RetroRoms, "gba"),
+        move |ui, _| { retro(ui) }
+    );
+    case!(
+        "53p-retro-controls",
+        at(Screen::RetroControls, "snes"),
+        move |ui, _| retro(ui)
+    );
+    case!(
+        "53q-retro-playing",
+        at(Screen::RetroRoms, "gba"),
+        move |ui, m| {
+            retro(ui);
+            ui.model_action(m, Action::Select);
+            ui.retro.frame = Some((240, 160));
+        }
+    );
+    case!(
+        "53r-retro-menu",
+        at(Screen::RetroRoms, "gba"),
+        move |ui, m| {
+            retro(ui);
+            ui.model_action(m, Action::Select);
+            ui.retro.frame = Some((240, 160));
+            ui.retro_open_menu(m);
+        }
+    );
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

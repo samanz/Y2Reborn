@@ -16,6 +16,7 @@ mod maze;
 pub mod news;
 pub mod pages;
 pub mod reader;
+pub mod retro;
 mod rocks;
 mod screens;
 mod text;
@@ -283,6 +284,9 @@ pub struct Ui {
     /// Doom: whether the engine is installed, the games found, the game
     /// running.
     pub doom: doom::DoomView,
+    /// Retro games: whether they are installed, systems, games on the
+    /// card, the game running.
+    pub retro: retro::RetroView,
 }
 
 /// A dialog the player raises by itself.
@@ -1202,6 +1206,10 @@ impl Ui {
             Action::ScreenSleep => return Effect::ScreenSleep,
             Action::ScreenWake => return Effect::ScreenWake,
             Action::PowerShort => {
+                // During a retro game Power is the game menu.
+                if let Some(effect) = self.retro_power(m) {
+                    return effect;
+                }
                 // A game pauses with the screen rather than the player going
                 // to sleep under it.
                 if matches!(
@@ -1499,6 +1507,9 @@ impl Ui {
             return Effect::None;
         }
         if let Some(effect) = self.doom_key(m, key) {
+            return effect;
+        }
+        if let Some(effect) = self.retro_key(m, key) {
             return effect;
         }
         if let Some(screen) = route(key) {

@@ -101,6 +101,10 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
         Screen::News => Page::rows(crate::news::headline_rows(&ui.news, &m.navigation.filter)),
         Screen::Games => Page::rows(games(ui, m)),
         Screen::Doom => crate::doom::page(&ui.doom),
+        Screen::Retro => crate::retro::systems_page(&ui.retro),
+        Screen::RetroRoms => crate::retro::roms_page(&ui.retro, m),
+        Screen::RetroControls => crate::retro::controls_page(&ui.retro, m),
+        Screen::RetroMenu => crate::retro::menu_page(&ui.retro),
         Screen::Music => Page::rows(vec![
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),
@@ -185,6 +189,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
 fn games(ui: &Ui, m: &AppModel) -> Vec<Item> {
     let mut rows = crate::games::rows(ui, m);
     rows.extend(crate::doom::games_row(&ui.doom));
+    rows.extend(crate::retro::games_row(&ui.retro));
     rows
 }
 
