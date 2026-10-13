@@ -86,6 +86,7 @@ fn standard_screen(c: &mut Canvas, f: &look::Frame) {
         | Screen::Equalizer
         | Screen::Crossfade
         | Screen::ScreenTimeout
+        | Screen::TimeZone
         | Screen::SettingsDisplay
         | Screen::Storage
         | Screen::Update => views_settings::screen(c, ui, m, tracks, interactive),
@@ -267,6 +268,7 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::SettingsPlayback => "Playback".into(),
         Screen::Crossfade => "Crossfade".into(),
         Screen::ScreenTimeout => "Screen off after".into(),
+        Screen::TimeZone => "Time zone".into(),
         Screen::SettingsLibrary => "Library".into(),
         Screen::SettingsDisplay => "Display".into(),
         Screen::SettingsSystem => "Service".into(),

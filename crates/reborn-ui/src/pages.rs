@@ -127,8 +127,13 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
                 .with_kind(RowKind::Chevron),
             );
             rows.push(row("Album view", "album_view", m.settings.album_view.label()));
+            rows.push(
+                row("Time zone", "time_zone", crate::time_zone::summary(m))
+                    .with_kind(RowKind::Chevron),
+            );
             Page::rows(rows)
         }
+        Screen::TimeZone => Page::rows(crate::time_zone::rows(ui, m)),
         Screen::SettingsSystem => system(ui, m),
         Screen::Battery => battery(m),
         Screen::Sleep => sleep(m),

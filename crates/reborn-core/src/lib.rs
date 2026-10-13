@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
+pub mod clock;
 pub mod platform;
+mod zones;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -351,6 +353,8 @@ pub enum Screen {
     Crossfade,
     /// Screen-off delay picker.
     ScreenTimeout,
+    /// Time zone picker (Settings > Display).
+    TimeZone,
     SettingsLibrary,
     SettingsDisplay,
     SettingsSystem,
@@ -503,6 +507,9 @@ pub struct Settings {
     /// that is not installed draws the standard look.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub look: String,
+    /// The clock's tz database zone, e.g. "Europe/Berlin".
+    #[serde(default = "default_time_zone")]
+    pub time_zone: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -524,6 +531,9 @@ fn default_true() -> bool {
 }
 fn default_brightness() -> u8 {
     80
+}
+fn default_time_zone() -> String {
+    "UTC".into()
 }
 pub const BRIGHTNESS_LEVELS: [u8; 5] = [20, 40, 60, 80, 100];
 
@@ -552,6 +562,7 @@ impl Default for Settings {
             brightness: default_brightness(),
             album_view: AlbumView::CoverFlow,
             look: String::new(),
+            time_zone: default_time_zone(),
         }
     }
 }
@@ -644,6 +655,8 @@ pub enum Effect {
     SetShuffle(bool),
     SetRepeat(RepeatMode),
     SetScreenTimeout(u32),
+    /// Choose the clock's zone (tz database name).
+    SetTimeZone(String),
     QueueRemove(usize),
     QueueMove {
         index: usize,
