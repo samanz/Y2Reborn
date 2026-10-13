@@ -78,8 +78,11 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             row("Genres", "genres", ""),
             row("Songs", "tracks", ""),
             row("Folders", "folders", ""),
+            row("Extras", "extras", ""),
             row("Settings", "settings", ""),
         ]),
+        Screen::Extras => Page::rows(vec![Item::new("Weather", "weather")]),
+        Screen::WeatherCity => Page::rows(crate::weather::city_rows(&m.navigation.filter)),
         Screen::Music => Page::rows(vec![
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),

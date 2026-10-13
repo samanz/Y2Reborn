@@ -67,6 +67,10 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         | Screen::SettingsDisplay
         | Screen::Storage
         | Screen::Update => views_settings::screen(&mut c, ui, m, tracks, interactive),
+        Screen::Weather => {
+            components::status_bar(&mut c, ui, m, &screen_title(m).to_uppercase(), true);
+            crate::weather::draw(&mut c, &ui.weather, ui.accent());
+        }
         _ => views_system::page(&mut c, ui, m, tracks, interactive),
     }
     overlays(&mut c, ui, m, tracks);
@@ -259,6 +263,10 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::Diagnostics => "Diagnostics".into(),
         Screen::DiagnosticSection => crate::diagnostics::title(&m.navigation.filter).into(),
         Screen::ValueDetail | Screen::TextEntry | Screen::Pairing => "Reborn".into(),
+        Screen::Extras => "Extras".into(),
+        Screen::Weather => "Weather".into(),
+        Screen::WeatherCity if m.navigation.filter.is_empty() => "Weather city".into(),
+        Screen::WeatherCity => m.navigation.filter.clone(),
     }
 }
 

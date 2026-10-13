@@ -74,7 +74,8 @@ pub fn home(
     let rows = ui.rows(m, tracks);
     let focus = m.navigation.focus.min(rows.len().saturating_sub(1));
     let counts = ui.library_counts(tracks);
-    // Seven rows (with Genres) must still end above the screen's bottom edge.
+    // Rows tighten as Home grows; nine must still end above the screen's
+    // bottom edge.
     let step = (296. / rows.len().max(1) as f32).min(44.).floor();
     let mut y = 50.;
     for (i, row) in rows.iter().enumerate() {
@@ -82,7 +83,8 @@ pub fn home(
         let cy = y + if selected { step / 2. + 3. } else { step / 2. };
         if selected {
             let at = c.draw.len();
-            c.rrect(26., y + 8., 4., 34., 2., accent);
+            // Centred on the label, however tight the rows.
+            c.rrect(26., cy - 16., 4., 34., 2., accent);
             if interactive {
                 c.mark_focus(at);
             }

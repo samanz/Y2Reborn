@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
+pub mod cities;
 pub mod platform;
+pub mod weather;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -367,6 +369,13 @@ pub enum Screen {
     ValueDetail,
     TextEntry,
     Pairing,
+    /// Apps beside the music player: Weather and the like.
+    Extras,
+    /// The forecast for the chosen city.
+    Weather,
+    /// Choosing the weather city: countries, or one country's cities (the
+    /// navigation filter holds the country).
+    WeatherCity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -653,6 +662,10 @@ pub enum Effect {
     PowerOff,
     Reboot,
     Checkpoint,
+    /// Fetch the forecast for the weather city.
+    WeatherRefresh,
+    /// Make `cities::CITIES[i]` the weather city and fetch its forecast.
+    WeatherCity(usize),
 }
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {

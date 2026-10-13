@@ -211,7 +211,7 @@ fn visible_text(ui: &Ui, m: &AppModel) -> String {
     text
 }
 
-const NORMAL_SCREENS: [Screen; 26] = [
+const NORMAL_SCREENS: [Screen; 27] = [
     Screen::Home,
     Screen::Music,
     Screen::Albums,
@@ -238,6 +238,7 @@ const NORMAL_SCREENS: [Screen; 26] = [
     Screen::Storage,
     Screen::Update,
     Screen::About,
+    Screen::Extras,
 ];
 
 const ENGINEERING: [&str; 30] = [
@@ -291,6 +292,7 @@ fn root_is_a_small_music_player_menu() {
             "Genres",
             "Songs",
             "Folders",
+            "Extras",
             "Settings"
         ]
     );
@@ -299,6 +301,27 @@ fn root_is_a_small_music_player_menu() {
         .rows(&m, &m.library.tracks)
         .iter()
         .any(|r| r.key.contains("power")));
+}
+
+#[test]
+fn extras_holds_the_apps_beside_the_music_player() {
+    let mut ui = radios();
+    let mut m = app(Screen::Home);
+    select_key(&mut ui, &mut m, "extras");
+    assert_eq!(m.screen, Screen::Extras);
+    assert_eq!(screens::screen_title(&m), "Extras");
+    let labels: Vec<_> = ui
+        .rows(&m, &m.library.tracks)
+        .into_iter()
+        .map(|r| r.label)
+        .collect();
+    assert_eq!(labels, ["Weather"]);
+    select_key(&mut ui, &mut m, "weather");
+    assert_eq!(m.screen, Screen::Weather);
+    ui.model_action(&mut m, Action::Back);
+    assert_eq!((m.screen, m.navigation.focus), (Screen::Extras, 0));
+    ui.model_action(&mut m, Action::Back);
+    assert_eq!(m.screen, Screen::Home);
 }
 
 #[test]
@@ -462,6 +485,7 @@ fn every_normal_route_is_reachable_and_back_restores_parent_focus() {
         Screen::Storage,
         Screen::PcTransfer,
         Screen::Update,
+        Screen::Extras,
     ] {
         assert!(
             seen.iter().any(|s| s.starts_with(&format!("{screen:?}"))),
@@ -1640,7 +1664,7 @@ fn genres_open_their_albums_then_all_songs_or_one_album() {
 fn home_with_genres_fits_the_screen() {
     let ui = radios();
     let m = app(Screen::Home);
-    for focus in 0..7 {
+    for focus in 0..8 {
         let mut m = m.clone();
         m.navigation.focus = focus;
         let quads = ui.draw(&m, &m.library.tracks, false);

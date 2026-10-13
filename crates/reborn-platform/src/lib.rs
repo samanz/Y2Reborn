@@ -4,11 +4,13 @@ pub mod bluetooth;
 pub mod client;
 pub mod codecs;
 pub mod contract;
+mod https;
 pub mod input;
 pub mod kernel_events;
 mod native;
 pub mod power;
 pub mod storage;
+pub mod weather;
 pub mod wifi;
 pub mod workload;
 pub use native::{

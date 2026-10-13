@@ -211,6 +211,51 @@ fn at(screen: Screen, filter: &str) -> AppModel {
     m
 }
 
+/// A synthetic forecast in Open-Meteo's reply shape (invented weather),
+/// read a few minutes after it was fetched.
+fn preview_weather(ui: &mut Ui, imperial: bool) {
+    use reborn_core::weather::Place;
+    use reborn_platform::weather::{parse_air_json, parse_forecast_json};
+    let (body, place) = if imperial {
+        (
+            &include_bytes!(
+                "../../../../crates/reborn-platform/src/weather_fixtures/forecast-us.json"
+            )[..],
+            Place {
+                name: "Chicago".into(),
+                region: "Illinois, United States".into(),
+                country_code: "US".into(),
+                latitude: 41.88,
+                longitude: -87.63,
+            },
+        )
+    } else {
+        (
+            &include_bytes!(
+                "../../../../crates/reborn-platform/src/weather_fixtures/forecast.json"
+            )[..],
+            Place {
+                name: "London".into(),
+                region: "England, United Kingdom".into(),
+                country_code: "GB".into(),
+                latitude: 51.51,
+                longitude: -0.13,
+            },
+        )
+    };
+    let mut f = parse_forecast_json(body, imperial).expect("weather fixture");
+    if !imperial {
+        f.air = parse_air_json(include_bytes!(
+            "../../../../crates/reborn-platform/src/weather_fixtures/air.json"
+        ));
+    }
+    f.fetched_at = f.current.time - 240;
+    ui.weather.clock = Some(f.current.time);
+    ui.weather.place = Some(place);
+    ui.weather.forecast = Some(f);
+    ui.weather.fetched = Some(std::time::Instant::now());
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(
         std::env::args()
@@ -528,6 +573,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         m.position_ms = 20_000;
     });
     case!("50-song-info", at(Screen::TrackInfo, "0"));
+    case!("50b-extras", at(Screen::Extras, ""));
+    // Weather: every page, then its other states.
+    for (name, page) in [
+        ("51-weather-now", reborn_ui::weather::Page::Now),
+        ("51b-weather-hourly", reborn_ui::weather::Page::Hourly),
+        ("51c-weather-rain", reborn_ui::weather::Page::Rain),
+        ("51d-weather-wind", reborn_ui::weather::Page::Wind),
+        ("51e-weather-10-days", reborn_ui::weather::Page::Days),
+        ("51f-weather-sun-moon", reborn_ui::weather::Page::Sky),
+        ("51g-weather-air", reborn_ui::weather::Page::Air),
+        ("51h-weather-details", reborn_ui::weather::Page::Details),
+    ] {
+        case!(name, at(Screen::Weather, ""), move |ui, _| {
+            ui.accent = orange;
+            preview_weather(ui, false);
+            ui.weather.page = page;
+        });
+    }
+    case!(
+        "51i-weather-hour-cursor",
+        at(Screen::Weather, ""),
+        move |ui, m| {
+            ui.accent = teal;
+            preview_weather(ui, false);
+            ui.model_action(m, Action::NextTrack);
+            for _ in 0..19 {
+                ui.model_action(m, Action::WheelClockwise(1));
+            }
+        }
+    );
+    case!(
+        "51j-weather-offline",
+        at(Screen::Weather, ""),
+        move |ui, _| {
+            ui.accent = orange;
+            preview_weather(ui, false);
+            ui.weather.fetched = None;
+            ui.weather.error = Some("Connect to Wi-Fi to update".into());
+            ui.weather.clock = ui.weather.clock.map(|t| t + 2 * 3600);
+        }
+    );
+    case!(
+        "51k-weather-imperial",
+        at(Screen::Weather, ""),
+        move |ui, _| {
+            ui.accent = teal;
+            preview_weather(ui, true);
+        }
+    );
+    case!(
+        "51l-weather-no-city",
+        at(Screen::Weather, ""),
+        move |ui, _| {
+            ui.accent = orange;
+        }
+    );
+    case!(
+        "51m-weather-countries",
+        at(Screen::WeatherCity, ""),
+        |_, m| {
+            m.navigation.focus = 3;
+        }
+    );
+    case!("51n-weather-cities", at(Screen::WeatherCity, "Japan"));
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

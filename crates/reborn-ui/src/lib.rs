@@ -19,6 +19,7 @@ mod views_library;
 mod views_playing;
 mod views_settings;
 mod views_system;
+pub mod weather;
 
 use reborn_core::{
     platform::{LowBattery, UsbTransfer, WifiProblem},
@@ -263,6 +264,8 @@ pub struct Ui {
     pub collection_art: std::cell::Cell<Option<u64>>,
     /// The centre cover the last frame wants at full resolution.
     cover_request: std::cell::Cell<Option<(u64, usize)>>,
+    /// The weather city and its last forecast, kept by the app.
+    pub weather: weather::WeatherView,
 }
 
 /// A dialog the player raises by itself.
@@ -1168,6 +1171,10 @@ impl Ui {
                 _ => Effect::None,
             };
         }
+        // On Weather, Select and Next/Previous turn the page.
+        if let Some(effect) = self.weather_action(m, action) {
+            return effect;
+        }
         match action {
             Action::ScreenSleep => return Effect::ScreenSleep,
             Action::ScreenWake => return Effect::ScreenWake,
@@ -1332,7 +1339,7 @@ impl Ui {
             return Effect::AdjustVolume(WHEEL_VOLUME_STEP * direction as i8);
         }
         let accelerate = m.navigation.modal.is_none()
-            && Self::is_catalog(m.screen)
+            && (Self::is_catalog(m.screen) || m.screen == Screen::WeatherCity)
             && self.row_count(m, tracks) >= ACCELERATED_LIST_MINIMUM;
         if accelerate && suggested.abs() > 1 {
             self.fast_scroll_until = Some(Instant::now() + Duration::from_millis(700));
@@ -1449,6 +1456,9 @@ impl Ui {
         }
         if key == "shuffle:collection" {
             return self.play_filtered(m, tracks, true);
+        }
+        if let Some(effect) = self.weather_key(m, key) {
+            return effect;
         }
         if let Some(screen) = route(key) {
             Self::go(m, screen, "");
@@ -1954,6 +1964,7 @@ fn route(key: &str) -> Option<Screen> {
         "about" => Screen::About,
         "maintenance" => Screen::Maintenance,
         "diagnostics" => Screen::Diagnostics,
+        "extras" => Screen::Extras,
         _ => return None,
     })
 }

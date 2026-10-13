@@ -6,6 +6,7 @@ mod graphics_recovery;
 mod performance;
 mod playback;
 mod volume;
+mod weather;
 use reborn_control::{Command, PlaybackAction, Response};
 use reborn_core::platform::{Fact, LowBattery};
 use reborn_core::{
@@ -44,6 +45,8 @@ struct Runtime {
     /// Remaining frames of the first-frame fade from the boot mark into the UI.
     boot_fade: u8,
     thumbs: Option<artwork::Worker>,
+    /// Weather requests (none when headless).
+    weather: Option<weather::Worker>,
     playback: playback::Playback,
     log: Observer,
     db: Database,
@@ -1500,8 +1503,74 @@ impl Runtime {
                 power::request_shutdown(true)?;
             }
             Effect::Checkpoint => self.checkpoint(),
+            Effect::WeatherRefresh => {
+                if let Some(place) = self.ui.weather.place.clone() {
+                    self.weather_request(weather::Request::Forecast(place));
+                }
+            }
+            Effect::WeatherCity(i) => self.weather_request(weather::Request::City(i)),
         };
         Ok(())
+    }
+
+    /// Send a weather request, only while Wi-Fi is connected.
+    fn weather_request(&mut self, request: weather::Request) {
+        let w = &mut self.ui.weather;
+        if !matches!(self.ui.wifi.status, WifiStatus::Connected(_)) {
+            w.error = Some("Connect to Wi-Fi to update".into());
+            return;
+        }
+        if self
+            .weather
+            .as_ref()
+            .is_some_and(|worker| worker.send(request))
+        {
+            w.busy = true;
+            w.error = None;
+        } else {
+            w.error = Some("Weather isn't available right now".into());
+        }
+    }
+
+    /// Apply finished weather requests and save the result.
+    fn pump_weather(&mut self) {
+        let Some(worker) = self.weather.as_ref() else {
+            return;
+        };
+        let mut follow_up = None;
+        while let Ok(reply) = worker.replies.try_recv() {
+            let w = &mut self.ui.weather;
+            w.busy = false;
+            let failed = match reply {
+                weather::Reply::City(Ok(Some(place))) => {
+                    w.place = Some(place.clone());
+                    w.forecast = None;
+                    w.fetched = None;
+                    follow_up = Some(weather::Request::Forecast(place));
+                    None
+                }
+                weather::Reply::City(Ok(None)) => Some("That city wasn't found".to_owned()),
+                weather::Reply::Forecast(Ok(forecast)) => {
+                    w.forecast = Some(*forecast);
+                    w.fetched = Some(Instant::now());
+                    None
+                }
+                weather::Reply::City(Err(e)) | weather::Reply::Forecast(Err(e)) => Some(e),
+            };
+            if let Some(e) = &failed {
+                self.log
+                    .emit(Level::Warn, "weather", "request_failed", e, None, json!({}));
+            }
+            w.error = failed;
+            if let Err(e) = weather::save(&self.root, w) {
+                self.log
+                    .emit(Level::Warn, "weather", "save_failed", &e, None, json!({}));
+            }
+            self.dirty.mark_render();
+        }
+        if let Some(request) = follow_up {
+            self.weather_request(request);
+        }
     }
     /// Apply typed replies from the platform client.
     fn reload_dsp(&mut self) -> Result<(), String> {
@@ -2287,7 +2356,8 @@ fn run() -> Result<(), String> {
         }
     };
     startup_phase(&log, process_started, "graphics_ready");
-    let ui = Ui::default();
+    let mut ui = Ui::default();
+    weather::load(&root, &mut ui.weather);
     // The early splash keeps the display, showing real startup progress, until
     // the first complete UI frame below is ready. That frame is the hand-off:
     // it is presented under a full boot-screen cover that dissolves at once.
@@ -2410,6 +2480,11 @@ fn run() -> Result<(), String> {
             None
         } else {
             Some(artwork::Worker::spawn().map_err(|e| e.to_string())?)
+        },
+        weather: if headless {
+            None
+        } else {
+            Some(weather::Worker::spawn().map_err(|e| e.to_string())?)
         },
         playback,
         log: log.clone(),
@@ -2688,6 +2763,7 @@ fn run() -> Result<(), String> {
             }
         }
         rt.wifi_idle_tick();
+        rt.pump_weather();
         log.heartbeat("ui", 10);
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
