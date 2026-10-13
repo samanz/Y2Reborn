@@ -499,6 +499,10 @@ pub struct Settings {
     /// How Albums presents its covers.
     #[serde(default)]
     pub album_view: AlbumView,
+    /// Id of the look the UI is drawn in; empty for the standard look. An id
+    /// that is not installed draws the standard look.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub look: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -547,6 +551,7 @@ impl Default for Settings {
             repeat: RepeatMode::Off,
             brightness: default_brightness(),
             album_view: AlbumView::CoverFlow,
+            look: String::new(),
         }
     }
 }

@@ -29,7 +29,13 @@ pub const FALLBACK_PAD: f32 = 2.;
 pub const FALLBACK_ASCENT: f32 = 25.;
 
 impl Face {
+    /// The glyph set this face is drawn with in the current look, which may
+    /// set text in its own typeface (`Look::face`).
     pub fn set(self) -> &'static SetData {
+        crate::look::current().face(self).own_set()
+    }
+    /// This face's own glyph set, whatever the look.
+    fn own_set(self) -> &'static SetData {
         use fontdata::*;
         match self {
             Self::R11 => &R11,

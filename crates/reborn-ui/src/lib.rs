@@ -9,6 +9,7 @@ mod components;
 pub mod diagnostics;
 mod flow;
 mod fontdata;
+mod look;
 mod maskdata;
 pub mod pages;
 mod screens;
@@ -263,6 +264,9 @@ pub struct Ui {
     pub collection_art: std::cell::Cell<Option<u64>>,
     /// The centre cover the last frame wants at full resolution.
     cover_request: std::cell::Cell<Option<(u64, usize)>>,
+    /// The look's own motion (a slide, a crossfade) is under way; set by the
+    /// look while it draws.
+    pub(crate) look_moving: std::cell::Cell<bool>,
 }
 
 /// A dialog the player raises by itself.
@@ -365,6 +369,7 @@ impl Ui {
             || self.spinning
             || self.flow.borrow().moving()
             || self.transition_progress().is_some()
+            || self.look_moving.get()
     }
 
     /// Cover Flow's fractional centre for this frame, advanced in time.
@@ -620,13 +625,10 @@ impl Ui {
         counts
     }
 
-    /// The accent in use: the cover's, or the default before one is known.
+    /// The accent in use: the cover's, or the default before one is known,
+    /// as the look of the frame being drawn presents it.
     pub fn accent(&self) -> u32 {
-        if self.accent == 0 {
-            theme::color::ACCENT
-        } else {
-            self.accent
-        }
+        look::current().accent(self.accent)
     }
 
     /// Show the volume line for about a second.
@@ -1236,6 +1238,10 @@ impl Ui {
         }
         if self.text_entry {
             return self.entry(action);
+        }
+        // A look may take navigation on its own screens.
+        if let Some(effect) = look::of(m).input(self, m, tracks, action) {
+            return effect;
         }
         match action {
             Action::Home => {

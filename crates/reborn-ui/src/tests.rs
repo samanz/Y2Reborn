@@ -1050,6 +1050,41 @@ fn only_preferences_and_session_survive_serialization() {
 }
 
 #[test]
+fn a_look_that_is_not_installed_draws_and_navigates_as_the_standard_one() {
+    for screen in [
+        Screen::Home,
+        Screen::NowPlaying,
+        Screen::Albums,
+        Screen::Settings,
+    ] {
+        let (mut ui_a, mut ui_b) = (radios(), radios());
+        ui_a.motion_fixed = true;
+        ui_b.motion_fixed = true;
+        let mut standard = app(screen);
+        let mut unknown = app(screen);
+        unknown.settings.look = "missing".into();
+        let tracks = standard.library.tracks.clone();
+        let a = ui_a.draw(&standard, &tracks, false);
+        let b = ui_b.draw(&unknown, &tracks, false);
+        assert_eq!(
+            serde_json::to_string(&a).unwrap(),
+            serde_json::to_string(&b).unwrap(),
+            "{screen:?}"
+        );
+        assert_eq!(ui_a.animating(), ui_b.animating(), "{screen:?}");
+        for action in [Action::WheelClockwise(1), Action::Select, Action::Back] {
+            assert_eq!(
+                ui_a.action(&mut standard, &tracks, action),
+                ui_b.action(&mut unknown, &tracks, action),
+                "{screen:?} {action:?}"
+            );
+            assert_eq!(standard.screen, unknown.screen);
+            assert_eq!(standard.navigation.focus, unknown.navigation.focus);
+        }
+    }
+}
+
+#[test]
 fn custom_equalizer_edits_one_db_per_detent_and_only_applies_on_select() {
     let mut ui = radios();
     let mut m = app(Screen::Equalizer);

@@ -2,6 +2,7 @@
 //! grouped cards, switches, pills, covers, sheets and toasts.
 use crate::{
     canvas::{Canvas, Icon},
+    look,
     text::{self, Face},
     theme::{alpha, color, fade, mix, HEIGHT, WIDTH},
     Ui,
@@ -66,6 +67,9 @@ pub fn art_key(track: &Track) -> u64 {
 /// The top strip: optional back arrow, a tracked-caps title in the middle and
 /// the status cluster (radios, charging, battery) on the right.
 pub fn status_bar(c: &mut Canvas, ui: &Ui, m: &AppModel, title: &str, back: bool) {
+    if look::current().status_bar(c, ui, m, title, back) {
+        return;
+    }
     if back {
         c.icon(Icon::Back, 22., 18., 20., color::MUTED);
     }
@@ -368,6 +372,9 @@ pub struct SheetRow<'a> {
 /// A bottom sheet of actions, as used for song options. The focused row is a
 /// white pill with dark text, so focus never depends on colour.
 pub fn action_sheet(c: &mut Canvas, title: &str, subtitle: &str, rows: &[SheetRow], focus: usize) {
+    if look::current().action_sheet(c, title, subtitle, rows, focus) {
+        return;
+    }
     scrim(c, false);
     let row_h = 31.;
     let head = if subtitle.is_empty() { 40. } else { 52. };
@@ -426,6 +433,9 @@ pub fn dialog(
     focus: usize,
     danger: bool,
 ) {
+    if look::current().dialog(c, title, body, rows, focus, danger) {
+        return;
+    }
     scrim(c, true);
     let lines = text::wrap(Face::R13, body, 300., 4);
     let h = 74. + lines.len() as f32 * 19. + rows.len() as f32 * 38. + 10.;
@@ -480,6 +490,9 @@ pub enum Tone {
 
 /// A short message at the top of the screen.
 pub fn toast(c: &mut Canvas, message: &str, tone: Tone) {
+    if look::current().toast(c, message, tone) {
+        return;
+    }
     let w = (text::width(Face::S13, message) + 52.).min(WIDTH - 32.);
     let x = (WIDTH - w) / 2.;
     let y = 44.;

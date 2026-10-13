@@ -4,6 +4,7 @@
 use crate::{
     canvas::Canvas,
     components::{self, SheetRow, Tone},
+    look,
     text::{self, Face},
     theme::{color, HEIGHT, WIDTH},
     views_library, views_playing, views_settings, views_system, Alert, Item, Ui,
@@ -24,31 +25,52 @@ pub fn visible_rows_for(screen: Screen) -> usize {
 
 pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad> {
     let mut c = Canvas::new();
-    c.rect(0., 0., WIDTH, HEIGHT, color::BG);
+    // Installing and the dark screen-off frame always use the standard look:
+    // they continue the boot and splash screens.
     if matches!(
         m.platform.busy,
         Some(reborn_core::PlatformTask::UpdateApply | reborn_core::PlatformTask::UpdateRollback)
-    ) {
-        views_system::installing(&mut c);
+    ) || m.screen_off
+    {
+        c.rect(0., 0., WIDTH, HEIGHT, color::BG);
+        if !m.screen_off {
+            views_system::installing(&mut c);
+        }
         return c.finish();
     }
-    if m.screen_off {
-        return c.finish();
-    }
-    let interactive = m.navigation.modal.is_none()
-        && ui.pairing.is_none()
-        && !ui.text_entry
-        && ui.alert.is_none();
-    if ui.usb_overlay(m) {
-        views_system::usb(&mut c, ui, m);
+    let look = look::of(m);
+    // A look that moves sets this again while it draws.
+    ui.look_moving.set(false);
+    let f = look::Frame {
+        ui,
+        m,
+        tracks,
+        has_art,
+        interactive: m.navigation.modal.is_none()
+            && ui.pairing.is_none()
+            && !ui.text_entry
+            && ui.alert.is_none(),
+    };
+    look::with(look, || {
+        look.backdrop(&mut c, &f);
+        if ui.usb_overlay(m) {
+            views_system::usb(&mut c, ui, m);
+        } else if !look.screen(&mut c, &f) {
+            standard_screen(&mut c, &f);
+        }
         overlays(&mut c, ui, m, tracks);
-        return c.finish();
-    }
+    });
+    c.finish()
+}
+
+/// The standard UI v3 drawing of the current screen.
+fn standard_screen(c: &mut Canvas, f: &look::Frame) {
+    let (ui, m, tracks, has_art, interactive) = (f.ui, f.m, f.tracks, f.has_art, f.interactive);
     match m.screen {
         Screen::NowPlaying if m.current().is_some() => {
-            views_playing::now_playing(&mut c, ui, m, tracks, has_art, interactive)
+            views_playing::now_playing(c, ui, m, tracks, has_art, interactive)
         }
-        Screen::Home => views_library::home(&mut c, ui, m, tracks, has_art, interactive),
+        Screen::Home => views_library::home(c, ui, m, tracks, has_art, interactive),
         Screen::Albums
         | Screen::Artists
         | Screen::Genres
@@ -56,7 +78,7 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         | Screen::Folders
         | Screen::Album
         | Screen::Artist
-        | Screen::Queue => views_library::browse(&mut c, ui, m, tracks, has_art, interactive),
+        | Screen::Queue => views_library::browse(c, ui, m, tracks, has_art, interactive),
         Screen::Settings
         | Screen::Wifi
         | Screen::Bluetooth
@@ -66,11 +88,9 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         | Screen::ScreenTimeout
         | Screen::SettingsDisplay
         | Screen::Storage
-        | Screen::Update => views_settings::screen(&mut c, ui, m, tracks, interactive),
-        _ => views_system::page(&mut c, ui, m, tracks, interactive),
+        | Screen::Update => views_settings::screen(c, ui, m, tracks, interactive),
+        _ => views_system::page(c, ui, m, tracks, interactive),
     }
-    overlays(&mut c, ui, m, tracks);
-    c.finish()
 }
 
 /// The sheet, dialog or entry surface above the screen, then toasts and the
