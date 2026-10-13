@@ -131,9 +131,22 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
                 row("Time zone", "time_zone", crate::time_zone::summary(m))
                     .with_kind(RowKind::Chevron),
             );
+            rows.push(row("Look", "look", crate::look::of(m).name()).with_kind(RowKind::Chevron));
             Page::rows(rows)
         }
         Screen::TimeZone => Page::rows(crate::time_zone::rows(ui, m)),
+        Screen::Look => {
+            let current = crate::look::of(m).id();
+            Page::rows(
+                crate::look::LOOKS
+                    .iter()
+                    .map(|look| {
+                        row(look.name(), &format!("look_set:{}", look.id()), look.about())
+                            .with_kind(RowKind::Check(look.id() == current))
+                    })
+                    .collect(),
+            )
+        }
         Screen::SettingsSystem => system(ui, m),
         Screen::Battery => battery(m),
         Screen::Sleep => sleep(m),

@@ -625,6 +625,39 @@ fn time_zone_opens_at_the_chosen_zone_and_the_status_bar_shows_its_time() {
 }
 
 #[test]
+fn the_look_is_chosen_in_display_and_only_installed_looks_are_offered() {
+    let mut ui = radios();
+    let mut m = app(Screen::SettingsDisplay);
+    let row = ui
+        .rows(&m, &m.library.tracks)
+        .into_iter()
+        .find(|r| r.key == "look")
+        .expect("Look row");
+    assert_eq!(
+        (row.secondary.as_str(), row.kind),
+        ("Reborn", RowKind::Chevron)
+    );
+    select_key(&mut ui, &mut m, "look");
+    assert_eq!(m.screen, Screen::Look);
+    let rows = ui.rows(&m, &m.library.tracks);
+    let names: Vec<_> = rows.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(names, ["Reborn", "Gallery"]);
+    assert_eq!(rows[0].kind, RowKind::Check(true));
+    assert_eq!(
+        select_key(&mut ui, &mut m, "look_set:gallery"),
+        Effect::SetLook("gallery".into())
+    );
+    assert_eq!(
+        select_key(&mut ui, &mut m, "look_set:"),
+        Effect::SetLook(String::new())
+    );
+    assert!(ui.setting(&mut m, "look_set:missing").is_none());
+    m.settings.look = "gallery".into();
+    let rows = ui.rows(&m, &m.library.tracks);
+    assert_eq!(rows[1].kind, RowKind::Check(true));
+}
+
+#[test]
 fn sound_pickers_set_exact_values_and_show_the_current_one() {
     let mut ui = radios();
     let mut m = app(Screen::Crossfade);

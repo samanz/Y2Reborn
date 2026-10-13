@@ -1444,6 +1444,10 @@ impl Runtime {
                 self.model.settings.time_zone = zone;
                 self.checkpoint();
             }
+            Effect::SetLook(id) => {
+                self.model.settings.look = id;
+                self.checkpoint();
+            }
             Effect::QueueRemove(index) => {
                 if index == self.model.queue_position {
                     self.ui.flash("The current track stays in the queue");

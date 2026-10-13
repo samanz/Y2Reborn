@@ -40,6 +40,12 @@ pub(crate) struct Frame<'a> {
 pub(crate) trait Look: Sync {
     /// Stable identifier stored in the settings.
     fn id(&self) -> &'static str;
+    /// The name in Settings > Display > Look.
+    fn name(&self) -> &'static str;
+    /// One short line under the name there.
+    fn about(&self) -> &'static str {
+        ""
+    }
     /// The accent for this frame, given the one taken from the cover (0 when
     /// no cover has been seen).
     fn accent(&self, cover: u32) -> u32 {
@@ -118,10 +124,16 @@ impl Look for Standard {
     fn id(&self) -> &'static str {
         ""
     }
+    fn name(&self) -> &'static str {
+        "Reborn"
+    }
+    fn about(&self) -> &'static str {
+        "The standard look"
+    }
 }
 
 /// Every installed look, the standard one first.
-pub(crate) static LOOKS: &[&dyn Look] = &[&Standard];
+pub(crate) static LOOKS: &[&dyn Look] = &[&Standard, &crate::looks::gallery::Gallery];
 
 /// The look stored as `id`; the standard look for an empty or unknown id.
 pub(crate) fn by_id(id: &str) -> &'static dyn Look {
@@ -176,6 +188,9 @@ mod tests {
     impl Look for Large {
         fn id(&self) -> &'static str {
             "large"
+        }
+        fn name(&self) -> &'static str {
+            "Large"
         }
         fn face(&self, _: Face) -> Face {
             Face::S36

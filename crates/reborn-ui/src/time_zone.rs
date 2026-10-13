@@ -23,13 +23,15 @@ fn rule(m: &AppModel) -> Rule {
     clock::zone(&m.settings.time_zone).unwrap_or(Rule::UTC)
 }
 
+/// The local time in the chosen zone, once the system time is set.
+pub(crate) fn local(ui: &Ui, m: &AppModel) -> Option<clock::Local> {
+    let now = now(ui);
+    (now >= CLOCK_SET_AFTER).then(|| rule(m).local(now))
+}
+
 /// The status-bar clock, e.g. "9:41" or "21:41".
 pub(crate) fn text(ui: &Ui, m: &AppModel) -> Option<String> {
-    let now = now(ui);
-    if now < CLOCK_SET_AFTER {
-        return None;
-    }
-    let local = rule(m).local(now);
+    let local = local(ui, m)?;
     Some(clock::clock_text(
         &local,
         clock::twelve_hour(&m.settings.time_zone),

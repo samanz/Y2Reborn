@@ -211,6 +211,26 @@ fn at(screen: Screen, filter: &str) -> AppModel {
     m
 }
 
+/// The Gallery look in the colours of a cover with accent `accent`.
+fn gallery(ui: &mut Ui, m: &mut AppModel, accent: u32) {
+    m.settings.look = "gallery".into();
+    ui.accent = accent;
+}
+
+/// Turn the wheel `n` detents clockwise.
+fn turn(ui: &mut Ui, m: &mut AppModel, n: usize) {
+    for _ in 0..n {
+        ui.model_action(m, Action::WheelClockwise(1));
+    }
+}
+
+/// Open Gallery's tab `n` from Today's tab pill.
+fn tab(ui: &mut Ui, m: &mut AppModel, n: usize) {
+    ui.model_action(m, Action::Back);
+    turn(ui, m, n);
+    ui.model_action(m, Action::Select);
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(
         std::env::args()
@@ -536,6 +556,133 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         m.position_ms = 20_000;
     });
     case!("50-song-info", at(Screen::TrackInfo, "0"));
+    case!("30c-look", at(Screen::Look, ""));
+    // The Gallery look: Today and its shelves, the tab pill, each tab, an
+    // album, Now Playing, lists and a sheet, in a warm and a cool cover's
+    // colours, and with nothing playing.
+    case!("80-gallery-a-today", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, orange)
+    });
+    case!("80-gallery-b-shelf", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, orange);
+        turn(ui, m, 2);
+    });
+    case!(
+        "80-gallery-c-artists",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, orange);
+            turn(ui, m, 16);
+        }
+    );
+    case!(
+        "80-gallery-d-library",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, orange);
+            turn(ui, m, 60);
+            for _ in 0..2 {
+                ui.model_action(m, Action::WheelCounterClockwise(1));
+            }
+        }
+    );
+    case!("80-gallery-e-pill", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, orange);
+        ui.model_action(m, Action::Back);
+        ui.model_action(m, Action::WheelClockwise(1));
+    });
+    case!("80-gallery-f-albums", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, orange);
+        tab(ui, m, 1);
+        turn(ui, m, 6);
+    });
+    case!(
+        "80-gallery-g-artists",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, teal);
+            tab(ui, m, 2);
+            turn(ui, m, 2);
+        }
+    );
+    case!("80-gallery-h-songs", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, teal);
+        tab(ui, m, 3);
+        turn(ui, m, 1);
+    });
+    case!(
+        "80-gallery-i-evening",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, teal);
+            // 19:41 UTC.
+            ui.clock_fixed = Some(1_791_834_060);
+            turn(ui, m, 1);
+        }
+    );
+    case!("80-gallery-j-idle", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, 0);
+        m.queue.clear();
+        m.queue_entry_ids.clear();
+        m.playback = PlaybackState::Stopped;
+        // 15:41 UTC.
+        ui.clock_fixed = Some(1_791_819_660);
+    });
+    case!("80-gallery-k-album", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, orange);
+        turn(ui, m, 3);
+        ui.model_action(m, Action::Select);
+        turn(ui, m, 2);
+    });
+    case!(
+        "80-gallery-l-now-playing",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, orange);
+            ui.model_action(m, Action::ShowNowPlaying);
+        }
+    );
+    case!("80-gallery-m-artist", at(Screen::Home, ""), move |ui, m| {
+        gallery(ui, m, teal);
+        tab(ui, m, 2);
+        ui.model_action(m, Action::Select);
+        turn(ui, m, 1);
+    });
+    case!(
+        "80-gallery-n-settings",
+        at(Screen::Settings, ""),
+        move |ui, m| {
+            gallery(ui, m, orange);
+            m.navigation.focus = 2;
+        }
+    );
+    case!("80-gallery-o-look", at(Screen::Look, ""), move |ui, m| {
+        gallery(ui, m, orange);
+        m.navigation.focus = 1;
+    });
+    case!(
+        "80-gallery-p-song-menu",
+        at(Screen::Home, ""),
+        move |ui, m| {
+            gallery(ui, m, teal);
+            tab(ui, m, 3);
+            turn(ui, m, 2);
+            ui.model_action(m, Action::ContextMenu);
+        }
+    );
+    case!(
+        "80-gallery-q-up-next",
+        at(Screen::Queue, ""),
+        move |ui, m| {
+            gallery(ui, m, orange);
+            m.navigation.focus = 2;
+        }
+    );
+    case!(
+        "80-gallery-r-folders",
+        at(Screen::Folders, ""),
+        move |ui, m| { gallery(ui, m, orange) }
+    );
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

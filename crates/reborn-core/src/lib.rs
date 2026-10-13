@@ -355,6 +355,8 @@ pub enum Screen {
     ScreenTimeout,
     /// Time zone picker (Settings > Display).
     TimeZone,
+    /// Look picker (Settings > Display).
+    Look,
     SettingsLibrary,
     SettingsDisplay,
     SettingsSystem,
@@ -657,6 +659,8 @@ pub enum Effect {
     SetScreenTimeout(u32),
     /// Choose the clock's zone (tz database name).
     SetTimeZone(String),
+    /// Choose the look the UI is drawn in, by id.
+    SetLook(String),
     QueueRemove(usize),
     QueueMove {
         index: usize,

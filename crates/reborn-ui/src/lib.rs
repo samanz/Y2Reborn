@@ -11,6 +11,7 @@ mod flow;
 mod fontdata;
 mod galleryfonts;
 mod look;
+mod looks;
 mod maskdata;
 pub mod pages;
 mod screens;
@@ -273,6 +274,8 @@ pub struct Ui {
     /// The look's own motion (a slide, a crossfade) is under way; set by the
     /// look while it draws.
     pub(crate) look_moving: std::cell::Cell<bool>,
+    /// What the Gallery look keeps between frames.
+    pub(crate) gallery: looks::gallery::State,
 }
 
 /// A dialog the player raises by itself.
@@ -1567,6 +1570,11 @@ impl Ui {
                 Effect::SetScreenTimeout(k["timeout_set:".len()..].parse().ok()?)
             }
             k if k.starts_with("tz_set:") => Effect::SetTimeZone(k["tz_set:".len()..].into()),
+            k if k.starts_with("look_set:") => {
+                let id = &k["look_set:".len()..];
+                look::LOOKS.iter().find(|l| l.id() == id)?;
+                Effect::SetLook(id.to_owned())
+            }
             k if k.starts_with("eq_preset:") => {
                 let name = &k["eq_preset:".len()..];
                 let (_, _, gains) = pages::EQ_PRESETS.iter().find(|(_, key, _)| *key == name)?;
@@ -1976,6 +1984,7 @@ fn route(key: &str) -> Option<Screen> {
         "screen_timeout" => Screen::ScreenTimeout,
         "library" => Screen::SettingsLibrary,
         "display" => Screen::SettingsDisplay,
+        "look" => Screen::Look,
         "system" => Screen::SettingsSystem,
         "battery" => Screen::Battery,
         "sleep" => Screen::Sleep,
