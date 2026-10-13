@@ -201,6 +201,72 @@ fn ui() -> Ui {
     ui
 }
 
+/// Shows as read from feeds on the card: one episode heard part-way, one
+/// played, one downloading, others only listed.
+fn podcasts() -> reborn_ui::podcasts::PodcastsView {
+    use reborn_core::podcasts::{Episode, Show};
+    let now = 1_760_000_000;
+    let episode = |id: &str, title: &str, days: i64, minutes: u64| Episode {
+        id: id.into(),
+        title: title.into(),
+        published: now - days * 86_400 - 3600,
+        duration_s: minutes * 60,
+        url: format!("https://media.example.org/{id}.mp3"),
+        length: minutes * 960_000,
+        mime: "audio/mpeg".into(),
+        description: "Why does bread rise, and why does it sometimes not? We follow one loaf \
+            from a spoon of starter to the oven, with a baker who has kept the same culture \
+            going for twenty years.\nAlso in this episode: salt, timing, and what the crust \
+            tells you about the inside.\n- Starter basics\n- Proving in a cold kitchen"
+            .into(),
+    };
+    let show = |title: &str, folder: &str, episodes: Vec<Episode>| Show {
+        feed: format!("https://feeds.example.org/{folder}.xml"),
+        title: title.into(),
+        author: "Example Media".into(),
+        folder: title.into(),
+        episodes,
+        ..Default::default()
+    };
+    let mut v = reborn_ui::podcasts::PodcastsView {
+        shows: vec![
+            show(
+                "Kitchen Table Science",
+                "kitchen",
+                vec![
+                    episode("k5", "Why bread rises (and sometimes doesn't)", 0, 42),
+                    episode("k4", "Salt, explained", 3, 35),
+                    episode("k3", "The secret life of yeast", 10, 51),
+                    episode("k2", "Cold kitchens and slow dough", 17, 38),
+                    episode("k1", "Starting a starter", 24, 29),
+                ],
+            ),
+            show(
+                "The Example Garden",
+                "garden",
+                vec![episode("g1", "Tomatoes and basil", 5, 28)],
+            ),
+            show(
+                "Long Walks with Quiet Maps",
+                "walks",
+                vec![episode("w1", "Harbour to headland", 2, 74)],
+            ),
+        ],
+        card: true,
+        now,
+        ..Default::default()
+    };
+    for id in ["k4", "k3", "g1"] {
+        v.on_card.insert(id.into());
+    }
+    v.state.listened("k4", 1_260_000, 2_100_000);
+    v.state.mark_played("k3");
+    v.state.want("k5");
+    v.downloading = Some(("k5".into(), 16_000_000));
+    v.state.checked = Some(now - 2 * 3600);
+    v
+}
+
 /// Adjusts one preview state before it is drawn.
 type Setup = Box<dyn Fn(&mut Ui, &mut AppModel)>;
 
@@ -528,6 +594,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         m.position_ms = 20_000;
     });
     case!("50-song-info", at(Screen::TrackInfo, "0"));
+    // Podcasts
+    case!("51-podcasts", at(Screen::Podcasts, ""), move |ui, m| {
+        ui.accent = teal;
+        ui.podcasts = podcasts();
+        m.navigation.focus = 1;
+    });
+    case!(
+        "52-podcast-show",
+        at(Screen::PodcastShow, "Kitchen Table Science"),
+        move |ui, m| {
+            ui.accent = teal;
+            ui.podcasts = podcasts();
+            m.navigation.focus = 1;
+        }
+    );
+    case!(
+        "53-podcast-episode",
+        at(Screen::PodcastEpisode, "k4"),
+        move |ui, _| {
+            ui.accent = teal;
+            ui.podcasts = podcasts();
+        }
+    );
+    case!(
+        "54-podcast-episode-downloading",
+        at(Screen::PodcastEpisode, "k5"),
+        move |ui, _| {
+            ui.accent = teal;
+            ui.podcasts = podcasts();
+        }
+    );
+    case!(
+        "55-podcast-delete",
+        at(Screen::PodcastEpisode, "k4"),
+        move |ui, m| {
+            ui.accent = teal;
+            ui.podcasts = podcasts();
+            m.navigation.focus = 2;
+            ui.model_action(m, Action::Select);
+        }
+    );
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

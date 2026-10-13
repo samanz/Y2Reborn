@@ -7,6 +7,7 @@ pub mod contract;
 pub mod input;
 pub mod kernel_events;
 mod native;
+pub mod podcast_fetch;
 pub mod power;
 pub mod storage;
 pub mod wifi;

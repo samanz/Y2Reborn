@@ -1345,6 +1345,13 @@ fn scan_sources_with_identity_and_reuse(
                     stats.failures += 1;
                     continue;
                 }
+                // Downloaded podcast episodes are listed under Podcasts.
+                if depth == 0
+                    && entry.file_name() == reborn_core::podcasts::FOLDER
+                    && path.join(reborn_core::podcasts::MARKER).exists()
+                {
+                    continue;
+                }
                 match fs::read_dir(&path) {
                     Ok(entries) => directories.push((entries, depth + 1)),
                     Err(_) => {

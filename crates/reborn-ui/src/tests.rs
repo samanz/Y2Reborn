@@ -291,6 +291,7 @@ fn root_is_a_small_music_player_menu() {
             "Genres",
             "Songs",
             "Folders",
+            "Podcasts",
             "Settings"
         ]
     );
@@ -1640,7 +1641,7 @@ fn genres_open_their_albums_then_all_songs_or_one_album() {
 fn home_with_genres_fits_the_screen() {
     let ui = radios();
     let m = app(Screen::Home);
-    for focus in 0..7 {
+    for focus in 0..8 {
         let mut m = m.clone();
         m.navigation.focus = focus;
         let quads = ui.draw(&m, &m.library.tracks, false);

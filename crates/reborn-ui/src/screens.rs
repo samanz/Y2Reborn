@@ -6,7 +6,7 @@ use crate::{
     components::{self, SheetRow, Tone},
     text::{self, Face},
     theme::{color, HEIGHT, WIDTH},
-    views_library, views_playing, views_settings, views_system, Alert, Item, Ui,
+    views_library, views_playing, views_podcasts, views_settings, views_system, Alert, Item, Ui,
 };
 use reborn_core::{platform::LowBattery, AppModel, Modal, Screen, Track};
 use reborn_graphics::Quad;
@@ -67,6 +67,9 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         | Screen::SettingsDisplay
         | Screen::Storage
         | Screen::Update => views_settings::screen(&mut c, ui, m, tracks, interactive),
+        Screen::Podcasts | Screen::PodcastShow | Screen::PodcastEpisode => {
+            views_podcasts::draw(&mut c, ui, m, interactive)
+        }
         _ => views_system::page(&mut c, ui, m, tracks, interactive),
     }
     overlays(&mut c, ui, m, tracks);
@@ -259,6 +262,7 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::Diagnostics => "Diagnostics".into(),
         Screen::DiagnosticSection => crate::diagnostics::title(&m.navigation.filter).into(),
         Screen::ValueDetail | Screen::TextEntry | Screen::Pairing => "Reborn".into(),
+        Screen::Podcasts | Screen::PodcastShow | Screen::PodcastEpisode => "Podcasts".into(),
     }
 }
 

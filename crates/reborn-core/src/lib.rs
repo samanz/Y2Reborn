@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
+pub mod feed;
 pub mod platform;
+pub mod podcast_text;
+pub mod podcasts;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -367,6 +370,12 @@ pub enum Screen {
     ValueDetail,
     TextEntry,
     Pairing,
+    /// The shows from the feeds on the SD card.
+    Podcasts,
+    /// One show's episodes; the navigation filter holds its folder.
+    PodcastShow,
+    /// One episode's page; the navigation filter holds its id.
+    PodcastEpisode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -412,6 +421,8 @@ pub enum ConfirmAction {
     ForgetAllWifi,
     ForgetAllBluetooth,
     ClearCache,
+    /// A podcast episode's audio; the context key holds the episode id.
+    DeleteEpisode,
     Platform(PlatformTask),
 }
 
@@ -653,6 +664,14 @@ pub enum Effect {
     PowerOff,
     Reboot,
     Checkpoint,
+    /// Read the podcast feeds again (Wi-Fi).
+    PodcastRefresh,
+    /// Start the downloads waiting in the podcast state, when on Wi-Fi.
+    PodcastDownload,
+    /// Play a downloaded episode from where listening left off.
+    PlayEpisode(String),
+    /// Delete an episode's audio from the card.
+    DeleteEpisode(String),
 }
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {

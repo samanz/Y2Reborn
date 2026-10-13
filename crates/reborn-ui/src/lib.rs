@@ -11,12 +11,14 @@ mod flow;
 mod fontdata;
 mod maskdata;
 pub mod pages;
+pub mod podcasts;
 mod screens;
 mod text;
 pub mod theme;
 mod views_coverflow;
 mod views_library;
 mod views_playing;
+mod views_podcasts;
 mod views_settings;
 mod views_system;
 
@@ -263,6 +265,8 @@ pub struct Ui {
     pub collection_art: std::cell::Cell<Option<u64>>,
     /// The centre cover the last frame wants at full resolution.
     cover_request: std::cell::Cell<Option<(u64, usize)>>,
+    /// Shows and episodes from the feeds on the SD card.
+    pub podcasts: podcasts::PodcastsView,
 }
 
 /// A dialog the player raises by itself.
@@ -1450,6 +1454,9 @@ impl Ui {
         if key == "shuffle:collection" {
             return self.play_filtered(m, tracks, true);
         }
+        if let Some(effect) = self.podcast_key(m, key) {
+            return effect;
+        }
         if let Some(screen) = route(key) {
             Self::go(m, screen, "");
             return Effect::None;
@@ -1756,6 +1763,9 @@ impl Ui {
                     ConfirmAction::ForgetAllWifi => Effect::ForgetAllWifi,
                     ConfirmAction::ForgetAllBluetooth => Effect::ForgetAllBluetooth,
                     ConfirmAction::ClearCache => Effect::ClearCache,
+                    ConfirmAction::DeleteEpisode => context
+                        .map(|id| self.delete_episode(m, id))
+                        .unwrap_or(Effect::None),
                     ConfirmAction::PowerOff => Effect::PowerOff,
                     ConfirmAction::Reboot => Effect::Reboot,
                     ConfirmAction::Platform(task) => Effect::Platform(task),
@@ -1936,6 +1946,7 @@ fn route(key: &str) -> Option<Screen> {
         "genres" => Screen::Genres,
         "tracks" => Screen::Tracks,
         "folders" => Screen::Folders,
+        "podcasts" => Screen::Podcasts,
         "wifi" => Screen::Wifi,
         "bluetooth" => Screen::Bluetooth,
         "pc_transfer" => Screen::PcTransfer,
@@ -2001,6 +2012,7 @@ fn confirm_label(action: ConfirmAction) -> &'static str {
         ConfirmAction::ForgetAllBluetooth => "Remove All",
         ConfirmAction::ResetSettings => "Reset",
         ConfirmAction::ClearCache => "Clear",
+        ConfirmAction::DeleteEpisode => "Delete",
         ConfirmAction::PowerOff => "Power Off",
         ConfirmAction::Reboot => "Restart",
         ConfirmAction::Platform(PlatformTask::UpdateApply) => "Restart and Install",
@@ -2043,6 +2055,10 @@ fn confirm_copy(action: ConfirmAction) -> (&'static str, &'static str) {
         ConfirmAction::ClearCache => (
             "Clear cache?",
             "Saved artwork copies are removed and recreated when needed. Music is not affected.",
+        ),
+        ConfirmAction::DeleteEpisode => (
+            "Delete this episode?",
+            "Its audio is removed from the SD card. You can download it again from its page.",
         ),
         ConfirmAction::PowerOff => ("Power off?", "Your queue and position are saved."),
         ConfirmAction::Reboot => ("Restart?", "Your queue and position are saved."),

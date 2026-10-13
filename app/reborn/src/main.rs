@@ -5,6 +5,8 @@ mod diagnostics;
 mod graphics_recovery;
 mod performance;
 mod playback;
+mod podcast_play;
+mod podcasts;
 mod volume;
 use reborn_control::{Command, PlaybackAction, Response};
 use reborn_core::platform::{Fact, LowBattery};
@@ -81,6 +83,7 @@ struct Runtime {
     /// Wi-Fi was blocked at runtime by that policy and must be restored on wake.
     wifi_idle_off: bool,
     wifi_idle_failed: bool,
+    podcasts: podcast_play::Podcasts,
 }
 
 fn sleep_control_allowed(command: &Command) -> bool {
@@ -1398,6 +1401,10 @@ impl Runtime {
                     "Couldn't clear everything. Try again."
                 });
             }
+            Effect::PodcastRefresh => self.podcast_refresh(),
+            Effect::PodcastDownload => self.podcast_next_download(),
+            Effect::PlayEpisode(id) => self.play_episode(&id)?,
+            Effect::DeleteEpisode(id) => self.delete_episode(&id),
             Effect::SetCrossfade(milliseconds) => {
                 self.model.settings.crossfade_ms = milliseconds.min(30_000);
                 if matches!(
@@ -1650,7 +1657,8 @@ impl Runtime {
             self.model.playback,
             PlaybackState::Playing | PlaybackState::Buffering
         );
-        let busy = self.model.platform.busy.is_some() || self.ui.wifi.scan.active();
+        let busy =
+            self.model.platform.busy.is_some() || self.ui.wifi.scan.active() || self.podcast_busy();
         let on_battery =
             self.model.platform.battery.charging == reborn_core::platform::ChargingState::OnBattery;
         if !reborn_core::platform::wifi_idle_power_down(
@@ -1724,7 +1732,8 @@ impl Runtime {
             || self.playback.has_pending_start()
             || self.pending_reconfiguration.is_some()
             || self.model.library.scanning
-            || self.query.is_some();
+            || self.query.is_some()
+            || self.podcast_busy();
         if playing || busy || !self.model.screen_off {
             self.sleep_attempt = Some(Instant::now());
             return;
@@ -2448,6 +2457,7 @@ fn run() -> Result<(), String> {
         sleep_attempt: None,
         wifi_idle_off: false,
         wifi_idle_failed: false,
+        podcasts: podcast_play::Podcasts::new(headless)?,
     };
     startup_phase(&log, process_started, "runtime_ready");
     let last_snapshot = Arc::new(Mutex::new(json!({"starting":true})));
@@ -2688,6 +2698,7 @@ fn run() -> Result<(), String> {
             }
         }
         rt.wifi_idle_tick();
+        rt.pump_podcasts();
         log.heartbeat("ui", 10);
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
@@ -2852,6 +2863,7 @@ fn run() -> Result<(), String> {
                         let _ = log.diagnostic(&root.join("diagnostics"), rt.snapshot(), true);
                     }
                     if ended {
+                        rt.episode_ended();
                         if let Err(e) = rt.finish_track() {
                             rt.fail("playback", e);
                         }

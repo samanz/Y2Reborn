@@ -78,6 +78,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             row("Genres", "genres", ""),
             row("Songs", "tracks", ""),
             row("Folders", "folders", ""),
+            row("Podcasts", "podcasts", ""),
             row("Settings", "settings", ""),
         ]),
         Screen::Music => Page::rows(vec![
@@ -94,6 +95,9 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
         .with_rows(vec![Item::new("Browse music", "home")]),
         Screen::NowPlaying => Page::default(),
         Screen::TrackInfo => track_info(m, tracks),
+        Screen::Podcasts | Screen::PodcastShow | Screen::PodcastEpisode => {
+            crate::podcasts::page(ui, m)
+        }
         Screen::Settings => settings(ui, m),
         Screen::Wifi => wifi(ui),
         Screen::Bluetooth => bluetooth(ui, m),
