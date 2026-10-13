@@ -256,6 +256,95 @@ fn preview_weather(ui: &mut Ui, imperial: bool) {
     ui.weather.fetched = Some(std::time::Instant::now());
 }
 
+/// The preview's clock for news ages.
+const PREVIEW_NEWS_NOW: i64 = 1_791_900_000;
+/// The feed the news previews read.
+const PREVIEW_FEED: &str = "https://news.example.org/rss.xml";
+
+/// Feeds as if listed in News/feeds.txt, headlines from the first, three
+/// stories saved, the first open in the reader (invented text).
+fn preview_news() -> reborn_ui::news::NewsView {
+    use reborn_core::news::Feed;
+    let feed = |url: &str, name: &str| Feed {
+        url: url.into(),
+        name: name.into(),
+    };
+    let headline = |title: &str, minutes: i64, slug: &str| reborn_core::news::Headline {
+        title: title.into(),
+        summary: "A fixture summary for the preview: two or three sentences of plain text \
+                  that wrap across the screen, the way a feed's description does on the player."
+            .into(),
+        published: Some(PREVIEW_NEWS_NOW - minutes * 60),
+        link: format!("https://example.com/news/{slug}"),
+    };
+    let items = vec![
+        headline("Town library reopens after a long repair", 18, "library"),
+        headline("New rail line opens with free weekend travel", 75, "rail"),
+        headline("Volunteers count the river's otters", 160, "otters"),
+        headline("Local team reaches the cup final", 300, "cup"),
+    ];
+    let saved = items[..3].iter().map(|h| h.link.clone()).collect();
+    let mut view = reborn_ui::news::NewsView {
+        feeds: vec![
+            feed(PREVIEW_FEED, "Example News"),
+            feed("https://world.example.org/feed.xml", "Example World"),
+            feed("https://blog.example.net/atom.xml", "Example Blog"),
+        ],
+        feed: PREVIEW_FEED.into(),
+        items,
+        fetched: Some(std::time::Instant::now()),
+        saved,
+        clock: Some(PREVIEW_NEWS_NOW),
+        ..Default::default()
+    };
+    view.open(0);
+    view.arrived("https://example.com/news/library", Ok(preview_article()));
+    view
+}
+
+/// A fixture story for the reader (invented text).
+fn preview_article() -> reborn_core::news::Article {
+    use reborn_core::news::{Block, BlockKind};
+    let p = |kind, text: &str| Block {
+        kind,
+        text: text.into(),
+    };
+    reborn_core::news::Article {
+        url: "https://example.com/news/library".into(),
+        title: "Town library reopens after a long repair".into(),
+        byline: "Riley Writer".into(),
+        paywalled: false,
+        blocks: vec![
+            p(
+                BlockKind::Paragraph,
+                "The town library will reopen on Monday after eighteen months of repairs to \
+                 its roof and windows, the council has said.",
+            ),
+            p(
+                BlockKind::Paragraph,
+                "Builders found the old timber frame in better condition than expected, which \
+                 kept the cost below the first estimate and let the work end early.",
+            ),
+            p(
+                BlockKind::Quote,
+                "People have asked about it every single week, and the shelves are ready.",
+            ),
+            p(BlockKind::Heading, "Opening hours"),
+            p(
+                BlockKind::Paragraph,
+                "The library will open from nine until six on weekdays, with a late evening \
+                 on Thursdays for the reading group and the homework club.",
+            ),
+            p(BlockKind::Item, "Children's corner open from Monday"),
+            p(BlockKind::Item, "Printing and scanning back next month"),
+            p(
+                BlockKind::Paragraph,
+                "A reopening party on Saturday will end with a reading in the garden.",
+            ),
+        ],
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(
         std::env::args()
@@ -637,6 +726,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
     case!("51n-weather-cities", at(Screen::WeatherCity, "Japan"));
+    // News: the feeds, a feed's headlines and the reader.
+    case!("52-news-feeds", at(Screen::News, ""), move |ui, _| {
+        ui.accent = teal;
+        ui.news = preview_news();
+    });
+    case!("52f-news-no-feeds", at(Screen::News, ""));
+    case!(
+        "52b-news-headlines",
+        at(Screen::News, PREVIEW_FEED),
+        move |ui, m| {
+            ui.accent = teal;
+            ui.news = preview_news();
+            ui.news.saving = 2;
+            m.navigation.focus = 1;
+        }
+    );
+    case!(
+        "52c-news-story",
+        at(Screen::NewsStory, "0"),
+        move |ui, _| {
+            ui.accent = teal;
+            ui.news = preview_news();
+        }
+    );
+    case!(
+        "52d-news-story-scrolled",
+        at(Screen::NewsStory, "0"),
+        move |ui, _| {
+            ui.accent = teal;
+            ui.news = preview_news();
+            ui.news.text_size = Some(2);
+            ui.news.reader.scroll.jump(150., 10_000.);
+        }
+    );
+    case!(
+        "52e-news-story-offline",
+        at(Screen::NewsStory, "3"),
+        move |ui, _| {
+            ui.accent = teal;
+            ui.news = preview_news();
+            ui.news.open(3);
+            ui.news.arrived(
+                "https://example.com/news/cup",
+                Err("Not saved for reading offline".into()),
+            );
+        }
+    );
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

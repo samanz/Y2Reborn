@@ -10,7 +10,9 @@ pub mod diagnostics;
 mod flow;
 mod fontdata;
 mod maskdata;
+pub mod news;
 pub mod pages;
+pub mod reader;
 mod screens;
 mod text;
 pub mod theme;
@@ -266,6 +268,8 @@ pub struct Ui {
     cover_request: std::cell::Cell<Option<(u64, usize)>>,
     /// The weather city and its last forecast, kept by the app.
     pub weather: weather::WeatherView,
+    /// Feeds, headlines and the story being read, kept by the app.
+    pub news: news::NewsView,
 }
 
 /// A dialog the player raises by itself.
@@ -368,6 +372,7 @@ impl Ui {
             || self.spinning
             || self.flow.borrow().moving()
             || self.transition_progress().is_some()
+            || self.news.scrolling()
     }
 
     /// Cover Flow's fractional centre for this frame, advanced in time.
@@ -1175,6 +1180,10 @@ impl Ui {
         if let Some(effect) = self.weather_action(m, action) {
             return effect;
         }
+        // In the news reader, Next and Previous change story.
+        if let Some(effect) = self.news_action(m, action) {
+            return effect;
+        }
         match action {
             Action::ScreenSleep => return Effect::ScreenSleep,
             Action::ScreenWake => return Effect::ScreenWake,
@@ -1458,6 +1467,9 @@ impl Ui {
             return self.play_filtered(m, tracks, true);
         }
         if let Some(effect) = self.weather_key(m, key) {
+            return effect;
+        }
+        if let Some(effect) = self.news_key(m, key) {
             return effect;
         }
         if let Some(screen) = route(key) {

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 pub mod cities;
+pub mod news;
 pub mod platform;
 pub mod weather;
 use serde::{Deserialize, Serialize};
@@ -376,6 +377,11 @@ pub enum Screen {
     /// Choosing the weather city: countries, or one country's cities (the
     /// navigation filter holds the country).
     WeatherCity,
+    /// The feeds, or one feed's headlines (the navigation filter holds its
+    /// address).
+    News,
+    /// One story in the reader (the filter holds its index in the headlines).
+    NewsStory,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -666,6 +672,10 @@ pub enum Effect {
     WeatherRefresh,
     /// Make `cities::CITIES[i]` the weather city and fetch its forecast.
     WeatherCity(usize),
+    /// Fetch the headlines of the feed at this address.
+    NewsFetch(String),
+    /// The full story at this link, from the saved copy or the web.
+    NewsArticle(String),
 }
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {

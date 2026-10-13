@@ -71,6 +71,11 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
             components::status_bar(&mut c, ui, m, &screen_title(m).to_uppercase(), true);
             crate::weather::draw(&mut c, &ui.weather, ui.accent());
         }
+        Screen::NewsStory => {
+            components::status_bar(&mut c, ui, m, &screen_title(m).to_uppercase(), true);
+            let index = m.navigation.filter.parse().unwrap_or(0);
+            crate::news::draw_story(&mut c, &ui.news, index, ui.accent());
+        }
         _ => views_system::page(&mut c, ui, m, tracks, interactive),
     }
     overlays(&mut c, ui, m, tracks);
@@ -267,6 +272,7 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::Weather => "Weather".into(),
         Screen::WeatherCity if m.navigation.filter.is_empty() => "Weather city".into(),
         Screen::WeatherCity => m.navigation.filter.clone(),
+        Screen::News | Screen::NewsStory => "News".into(),
     }
 }
 

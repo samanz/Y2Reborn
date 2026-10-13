@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
+mod articles;
 mod artwork;
 mod background;
 mod diagnostics;
 mod graphics_recovery;
+mod news;
 mod performance;
 mod playback;
 mod volume;
@@ -47,6 +49,10 @@ struct Runtime {
     thumbs: Option<artwork::Worker>,
     /// Weather requests (none when headless).
     weather: Option<weather::Worker>,
+    /// Headline requests (none when headless).
+    news: Option<news::Worker>,
+    /// Full stories: opened, and saved for reading offline.
+    articles: Option<articles::Articles>,
     playback: playback::Playback,
     log: Observer,
     db: Database,
@@ -1509,6 +1515,19 @@ impl Runtime {
                 }
             }
             Effect::WeatherCity(i) => self.weather_request(weather::Request::City(i)),
+            Effect::NewsFetch(url) => self.news_fetch(url),
+            Effect::NewsArticle(url) => {
+                let online = matches!(self.ui.wifi.status, WifiStatus::Connected(_));
+                if !self
+                    .articles
+                    .as_ref()
+                    .is_some_and(|a| a.open(url.clone(), online))
+                {
+                    self.ui
+                        .news
+                        .arrived(&url, Err("Full stories aren't available".into()));
+                }
+            }
         };
         Ok(())
     }
@@ -1570,6 +1589,104 @@ impl Runtime {
         }
         if let Some(request) = follow_up {
             self.weather_request(request);
+        }
+    }
+
+    /// Ask for a feed's headlines, only while Wi-Fi is connected.
+    fn news_fetch(&mut self, url: String) {
+        let n = &mut self.ui.news;
+        if n.feed != url {
+            n.feed = url.clone();
+            n.items.clear();
+            n.fetched = None;
+        }
+        if !matches!(self.ui.wifi.status, WifiStatus::Connected(_)) {
+            n.error = Some("Connect to Wi-Fi to update".into());
+            return;
+        }
+        if self.news.as_ref().is_some_and(|w| w.send(url)) {
+            n.busy = true;
+            n.error = None;
+        } else {
+            n.error = Some("Busy with another feed; try again".into());
+        }
+    }
+
+    /// Apply finished headline requests and stories; save the headlines and
+    /// the reader's text size; save the top stories for reading offline.
+    fn pump_news(&mut self) {
+        if std::mem::take(&mut self.ui.news.dirty) {
+            self.save_news();
+        }
+        let mut fresh = false;
+        if let Some(worker) = self.news.as_ref() {
+            while let Ok((url, result)) = worker.replies.try_recv() {
+                let n = &mut self.ui.news;
+                self.dirty.mark_render();
+                if n.feed != url {
+                    continue;
+                }
+                n.busy = false;
+                match result {
+                    Ok(items) => {
+                        n.items = items;
+                        n.fetched = Some(Instant::now());
+                        n.error = None;
+                        fresh = true;
+                        let top: Vec<String> = n
+                            .items
+                            .iter()
+                            .map(|h| h.link.clone())
+                            .filter(|l| !l.is_empty() && !n.saved.contains(l))
+                            .take(articles::PREFETCH)
+                            .collect();
+                        if !top.is_empty()
+                            && self
+                                .articles
+                                .as_ref()
+                                .is_some_and(|a| a.prefetch(top.clone()))
+                        {
+                            n.saving = top.len();
+                        }
+                    }
+                    Err(e) => {
+                        self.log
+                            .emit(Level::Warn, "news", "request_failed", &e, None, json!({}));
+                        n.error = Some(e);
+                    }
+                }
+            }
+        }
+        if fresh {
+            self.save_news();
+        }
+        if let Some(worker) = self.articles.as_ref() {
+            while let Ok(reply) = worker.replies.try_recv() {
+                let n = &mut self.ui.news;
+                match reply {
+                    articles::Reply::Article(url, result) => {
+                        if let Err(e) = &result {
+                            self.log
+                                .emit(Level::Warn, "news", "story_failed", e, None, json!({}));
+                        }
+                        n.arrived(&url, result);
+                    }
+                    articles::Reply::Saved { urls, pending } => {
+                        n.saved = urls.into_iter().collect();
+                        if let Some(p) = pending {
+                            n.saving = p;
+                        }
+                    }
+                }
+                self.dirty.mark_render();
+            }
+        }
+    }
+
+    fn save_news(&self) {
+        if let Err(e) = news::save(&self.root, &self.ui.news) {
+            self.log
+                .emit(Level::Warn, "news", "save_failed", &e, None, json!({}));
         }
     }
     /// Apply typed replies from the platform client.
@@ -2358,6 +2475,7 @@ fn run() -> Result<(), String> {
     startup_phase(&log, process_started, "graphics_ready");
     let mut ui = Ui::default();
     weather::load(&root, &mut ui.weather);
+    news::load(&root, &mut ui.news);
     // The early splash keeps the display, showing real startup progress, until
     // the first complete UI frame below is ready. That frame is the hand-off:
     // it is presented under a full boot-screen cover that dissolves at once.
@@ -2486,6 +2604,16 @@ fn run() -> Result<(), String> {
         } else {
             Some(weather::Worker::spawn().map_err(|e| e.to_string())?)
         },
+        news: if headless {
+            None
+        } else {
+            Some(news::Worker::spawn().map_err(|e| e.to_string())?)
+        },
+        articles: if headless {
+            None
+        } else {
+            Some(articles::Articles::spawn(root.join("news")).map_err(|e| e.to_string())?)
+        },
         playback,
         log: log.clone(),
         db,
@@ -2524,6 +2652,7 @@ fn run() -> Result<(), String> {
         wifi_idle_off: false,
         wifi_idle_failed: false,
     };
+    rt.ui.news.feeds = news::feeds(&rt.model.sources);
     startup_phase(&log, process_started, "runtime_ready");
     let last_snapshot = Arc::new(Mutex::new(json!({"starting":true})));
     let watcher = last_snapshot.clone();
@@ -2764,6 +2893,7 @@ fn run() -> Result<(), String> {
         }
         rt.wifi_idle_tick();
         rt.pump_weather();
+        rt.pump_news();
         log.heartbeat("ui", 10);
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
@@ -3391,6 +3521,7 @@ fn run() -> Result<(), String> {
                     let g = rt.model.generation;
                     rt.model.apply(Event::SourceChanged(sources.clone()));
                     rt.ui.invalidate_catalog();
+                    rt.ui.news.feeds = news::feeds(&rt.model.sources);
                     if let Some(worker) = &mut rt.thumbs {
                         worker.forget_failures();
                     }

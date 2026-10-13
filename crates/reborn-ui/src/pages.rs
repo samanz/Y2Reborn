@@ -81,8 +81,23 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             row("Extras", "extras", ""),
             row("Settings", "settings", ""),
         ]),
-        Screen::Extras => Page::rows(vec![Item::new("Weather", "weather")]),
+        Screen::Extras => Page::rows(vec![
+            Item::new("Weather", "weather"),
+            Item::new("News", "news"),
+        ]),
         Screen::WeatherCity => Page::rows(crate::weather::city_rows(&m.navigation.filter)),
+        Screen::News if m.navigation.filter.is_empty() && ui.news.feeds.is_empty() => {
+            Page::hero(crate::news::NO_FEEDS.0, crate::news::NO_FEEDS.1)
+        }
+        Screen::News if m.navigation.filter.is_empty() => {
+            let (rows, status) = crate::news::feed_rows(&ui.news);
+            Page {
+                rows,
+                status: Some(status),
+                ..Default::default()
+            }
+        }
+        Screen::News => Page::rows(crate::news::headline_rows(&ui.news, &m.navigation.filter)),
         Screen::Music => Page::rows(vec![
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),

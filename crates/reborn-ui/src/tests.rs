@@ -315,7 +315,7 @@ fn extras_holds_the_apps_beside_the_music_player() {
         .into_iter()
         .map(|r| r.label)
         .collect();
-    assert_eq!(labels, ["Weather"]);
+    assert_eq!(labels, ["Weather", "News"]);
     select_key(&mut ui, &mut m, "weather");
     assert_eq!(m.screen, Screen::Weather);
     ui.model_action(&mut m, Action::Back);

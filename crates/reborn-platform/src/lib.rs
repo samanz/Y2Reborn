@@ -1,4 +1,5 @@
 pub mod allocation_counts;
+pub mod article;
 pub mod avrcp;
 pub mod bluetooth;
 pub mod client;
@@ -8,6 +9,7 @@ mod https;
 pub mod input;
 pub mod kernel_events;
 mod native;
+pub mod news;
 pub mod power;
 pub mod storage;
 pub mod weather;
