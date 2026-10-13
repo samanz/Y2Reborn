@@ -76,6 +76,7 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
             let index = m.navigation.filter.parse().unwrap_or(0);
             crate::news::draw_story(&mut c, &ui.news, index, ui.accent());
         }
+        Screen::Game => crate::games::draw(&mut c, ui, m),
         _ => views_system::page(&mut c, ui, m, tracks, interactive),
     }
     overlays(&mut c, ui, m, tracks);
@@ -273,6 +274,10 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::WeatherCity if m.navigation.filter.is_empty() => "Weather city".into(),
         Screen::WeatherCity => m.navigation.filter.clone(),
         Screen::News | Screen::NewsStory => "News".into(),
+        Screen::Games => "Games".into(),
+        Screen::Game => crate::games::Kind::from_key(&m.navigation.filter)
+            .map_or("Games", |k| k.title())
+            .into(),
     }
 }
 

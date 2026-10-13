@@ -382,6 +382,10 @@ pub enum Screen {
     News,
     /// One story in the reader (the filter holds its index in the headlines).
     NewsStory,
+    /// Extras > Games: the games built into Reborn.
+    Games,
+    /// One game; the navigation filter holds its key.
+    Game,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -565,6 +569,13 @@ impl Default for Settings {
         }
     }
 }
+/// One best score per game; a session from before a game existed reads 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct GameBest {
+    pub shatterfield: u32,
+    pub pellet_rush: u32,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppModel {
     pub playback: PlaybackState,
@@ -587,6 +598,9 @@ pub struct AppModel {
     pub last_error: Option<String>,
     #[serde(default)]
     pub library: LibraryState,
+    /// Best scores of the games under Extras > Games, kept with the session.
+    #[serde(default)]
+    pub game_best: GameBest,
     #[serde(skip)]
     pub navigation: NavigationState,
     #[serde(skip)]
@@ -1049,6 +1063,26 @@ mod tests {
         assert_eq!(value["schema"], SESSION_SCHEMA_VERSION);
         assert!(fs::metadata(&path).unwrap().len() <= SESSION_MAX_BYTES as u64);
         assert!(AppModel::restore(&path).unwrap().current().is_some());
+        fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn game_best_scores_are_kept_with_the_session() {
+        let path = std::env::temp_dir().join(format!("reborn-games-{}.json", std::process::id()));
+        let mut model = AppModel::default();
+        model.game_best.pellet_rush = 8120;
+        model.checkpoint(&path).unwrap();
+        let restored = AppModel::restore(&path).unwrap();
+        assert_eq!(restored.game_best.pellet_rush, 8120);
+        assert_eq!(restored.game_best.shatterfield, 0);
+        // A session written before the games existed starts every best at 0.
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        value["model"].as_object_mut().unwrap().remove("game_best");
+        fs::write(&path, value.to_string()).unwrap();
+        assert_eq!(
+            AppModel::restore(&path).unwrap().game_best,
+            GameBest::default()
+        );
         fs::remove_file(path).unwrap();
     }
     #[test]

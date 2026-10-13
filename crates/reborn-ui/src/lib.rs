@@ -9,10 +9,13 @@ mod components;
 pub mod diagnostics;
 mod flow;
 mod fontdata;
+pub mod games;
 mod maskdata;
+mod maze;
 pub mod news;
 pub mod pages;
 pub mod reader;
+mod rocks;
 mod screens;
 mod text;
 pub mod theme;
@@ -270,6 +273,12 @@ pub struct Ui {
     pub weather: weather::WeatherView,
     /// Feeds, headlines and the story being read, kept by the app.
     pub news: news::NewsView,
+    /// The game under Extras > Games; kept, paused, while away from it.
+    pub game: Option<games::Game>,
+    game_clock: Option<Instant>,
+    /// Buttons the game took on press: the rest of each press (long press,
+    /// release) is the game's too, even after leaving it.
+    game_held: Vec<reborn_core::PhysicalControl>,
 }
 
 /// A dialog the player raises by itself.
@@ -373,6 +382,7 @@ impl Ui {
             || self.flow.borrow().moving()
             || self.transition_progress().is_some()
             || self.news.scrolling()
+            || self.game_running()
     }
 
     /// Cover Flow's fractional centre for this frame, advanced in time.
@@ -1253,6 +1263,11 @@ impl Ui {
         if self.text_entry {
             return self.entry(action);
         }
+        if m.screen == Screen::Game && m.navigation.modal.is_none() {
+            if let Some(effect) = self.game_action(action) {
+                return effect;
+            }
+        }
         match action {
             Action::Home => {
                 if m.navigation.modal.is_some() {
@@ -1471,6 +1486,10 @@ impl Ui {
         }
         if let Some(effect) = self.news_key(m, key) {
             return effect;
+        }
+        if let Some(kind) = key.strip_prefix("game:").and_then(games::Kind::from_key) {
+            self.open_game(m, kind);
+            return Effect::None;
         }
         if let Some(screen) = route(key) {
             Self::go(m, screen, "");
@@ -1977,6 +1996,7 @@ fn route(key: &str) -> Option<Screen> {
         "maintenance" => Screen::Maintenance,
         "diagnostics" => Screen::Diagnostics,
         "extras" => Screen::Extras,
+        "games" => Screen::Games,
         _ => return None,
     })
 }

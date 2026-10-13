@@ -84,6 +84,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
         Screen::Extras => Page::rows(vec![
             Item::new("Weather", "weather"),
             Item::new("News", "news"),
+            Item::new("Games", "games"),
         ]),
         Screen::WeatherCity => Page::rows(crate::weather::city_rows(&m.navigation.filter)),
         Screen::News if m.navigation.filter.is_empty() && ui.news.feeds.is_empty() => {
@@ -98,6 +99,7 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             }
         }
         Screen::News => Page::rows(crate::news::headline_rows(&ui.news, &m.navigation.filter)),
+        Screen::Games => Page::rows(crate::games::rows(ui, m)),
         Screen::Music => Page::rows(vec![
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),

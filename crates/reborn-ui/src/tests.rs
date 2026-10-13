@@ -315,7 +315,7 @@ fn extras_holds_the_apps_beside_the_music_player() {
         .into_iter()
         .map(|r| r.label)
         .collect();
-    assert_eq!(labels, ["Weather", "News"]);
+    assert_eq!(labels, ["Weather", "News", "Games"]);
     select_key(&mut ui, &mut m, "weather");
     assert_eq!(m.screen, Screen::Weather);
     ui.model_action(&mut m, Action::Back);
@@ -1740,4 +1740,129 @@ fn cover_flow_glides_opens_with_a_flight_and_asks_for_the_sharp_cover_at_rest() 
         .draw(&m, &tracks, false)
         .iter()
         .any(|q| q.tex == reborn_graphics::Tex::CollectionArt));
+}
+
+#[test]
+fn extras_games_lists_both_games_with_their_best_scores() {
+    let mut ui = radios();
+    let mut m = app(Screen::Home);
+    m.game_best.pellet_rush = 8120;
+    select_key(&mut ui, &mut m, "extras");
+    select_key(&mut ui, &mut m, "games");
+    assert_eq!(m.screen, Screen::Games);
+    let rows = ui.rows(&m, &m.library.tracks);
+    let shown: Vec<_> = rows
+        .iter()
+        .map(|r| (r.label.as_str(), r.secondary.as_str()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("Shatterfield", "Spin to aim and blast rocks"),
+            ("Pellet Rush", "Best 8120")
+        ]
+    );
+    let quads = ui.draw(&m, &m.library.tracks, false);
+    assert_eq!(crate::focus_target_count(&quads), 1);
+    select_key(&mut ui, &mut m, "game:pellet_rush");
+    assert_eq!(m.screen, Screen::Game);
+    assert_eq!(crate::screens::screen_title(&m), "Pellet Rush");
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Ready);
+}
+
+#[test]
+fn a_game_pauses_on_back_and_with_the_screen_and_resumes_where_it_was() {
+    let mut ui = radios();
+    let mut m = app(Screen::Games);
+    let tracks = m.library.tracks.clone();
+    select_key(&mut ui, &mut m, "game:shatterfield");
+    ui.action(&mut m, &tracks, Action::Select);
+    let start = Instant::now();
+    assert!(ui.tick_games(&mut m, start));
+    assert!(ui.tick_games(&mut m, start + Duration::from_millis(500)));
+    assert!(ui.animating(), "a game in play asks for frames");
+    // Back leaves for the list and the game pauses there.
+    ui.action(&mut m, &tracks, Action::Back);
+    assert_eq!(m.screen, Screen::Games);
+    assert!(!ui.tick_games(&mut m, start + Duration::from_secs(1)));
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Paused);
+    assert!(!ui.animating());
+    assert_eq!(ui.rows(&m, &tracks)[0].secondary, "Paused");
+    // Opening it again keeps the paused game; Select resumes it.
+    select_key(&mut ui, &mut m, "game:shatterfield");
+    let score = ui.game.as_ref().unwrap().score;
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Paused);
+    ui.action(&mut m, &tracks, Action::Select);
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Playing);
+    assert_eq!(ui.game.as_ref().unwrap().score, score);
+    // The screen going off pauses it as well.
+    m.screen_off = true;
+    ui.tick_games(&mut m, start + Duration::from_secs(2));
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Paused);
+}
+
+#[test]
+fn the_rest_of_a_press_the_game_took_never_reaches_the_screen_behind() {
+    use reborn_core::{NormalizedInput as N, PhysicalControl as C};
+    let mut ui = radios();
+    let mut m = app(Screen::Games);
+    select_key(&mut ui, &mut m, "game:pellet_rush");
+    assert!(
+        !ui.game_input(&mut m, N::Press(C::Back)),
+        "Back leaves the start card"
+    );
+    assert!(!ui.game_input(&mut m, N::Release(C::Back)));
+    ui.model_action(&mut m, Action::Select);
+    assert!(ui.game_input(&mut m, N::Press(C::Back)), "up");
+    assert!(ui.game_input(&mut m, N::LongPress(C::Back)));
+    assert_eq!(m.screen, Screen::Games, "held Back left the game");
+    assert_eq!(ui.game.as_ref().unwrap().phase, games::Phase::Paused);
+    assert!(ui.game_input(&mut m, N::Release(C::Back)), "swallowed");
+    assert!(!ui.game_input(&mut m, N::Press(C::Back)));
+    assert!(!ui.game_input(&mut m, N::Release(C::Back)));
+    // Shatterfield: Volume Up thrusts in play; its repeat and release are
+    // the game's, never the volume's.
+    select_key(&mut ui, &mut m, "game:shatterfield");
+    ui.model_action(&mut m, Action::Select);
+    assert!(ui.game_input(&mut m, N::Press(C::VolumeUp)));
+    assert!(ui.game_input(&mut m, N::Repeat(C::VolumeUp)));
+    assert!(ui.game_input(&mut m, N::Release(C::VolumeUp)));
+    assert!(
+        !ui.game_input(&mut m, N::Release(C::VolumeDown)),
+        "not pressed here"
+    );
+    // Away from the game nothing is taken.
+    ui.model_action(&mut m, Action::Back);
+    assert!(!ui.game_input(&mut m, N::Press(C::VolumeUp)));
+    assert!(!ui.game_input(&mut m, N::WheelClockwise(1)));
+}
+
+#[test]
+fn a_finished_game_keeps_its_score_as_the_new_best() {
+    let mut ui = radios();
+    let mut m = app(Screen::Games);
+    select_key(&mut ui, &mut m, "game:pellet_rush");
+    ui.model_action(&mut m, Action::Select);
+    // Standing still, the player is caught three times.
+    let start = Instant::now();
+    for frame in 1..=7200 {
+        ui.tick_games(&mut m, start + Duration::from_millis(frame * 16));
+        if ui.game.as_ref().unwrap().phase == games::Phase::Over {
+            break;
+        }
+    }
+    let game = ui.game.as_ref().unwrap();
+    assert_eq!(game.phase, games::Phase::Over);
+    assert!(game.score > 0);
+    assert_eq!(m.game_best.pellet_rush, game.score);
+    assert_eq!(m.game_best.shatterfield, 0);
+    // A lower score later leaves the best alone.
+    m.game_best.pellet_rush = game.score + 1000;
+    let best = m.game_best;
+    ui.model_action(&mut m, Action::Select);
+    ui.model_action(&mut m, Action::Select);
+    for frame in 1..=7200 {
+        ui.tick_games(&mut m, start + Duration::from_millis(200_000 + frame * 16));
+    }
+    assert_eq!(m.game_best, best);
 }

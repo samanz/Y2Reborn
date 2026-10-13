@@ -773,6 +773,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     );
+    // Games: the list, then each game's start card, play and game over.
+    case!("53-games", at(Screen::Games, ""), |_, m| {
+        m.game_best.pellet_rush = 8120;
+    });
+    {
+        use reborn_core::{NormalizedInput as N, PhysicalControl as C};
+        use reborn_ui::games::{Game, Kind, Phase};
+        fn run(g: &mut Game, ms: f32) {
+            for _ in 0..(ms / 16.).round() as usize {
+                g.advance(16.);
+            }
+        }
+        fn shatterfield() -> Game {
+            let mut g = Game::new(Kind::Shatterfield, 21);
+            g.select();
+            g.input(N::Press(C::VolumeDown));
+            for k in 0..14 {
+                g.input(N::WheelClockwise(if k % 4 == 0 { 2 } else { 1 }));
+                run(&mut g, 160.);
+            }
+            g.input(N::Release(C::VolumeDown));
+            g.input(N::Press(C::VolumeUp));
+            run(&mut g, 600.);
+            g.input(N::Press(C::VolumeDown));
+            run(&mut g, 100.);
+            g
+        }
+        fn pellet_rush() -> Game {
+            let mut g = Game::new(Kind::PelletRush, 21);
+            g.select();
+            // Along the corridor below the house to the left wall, then down
+            // to a power pellet: the chasers are frightened.
+            run(&mut g, 3500.);
+            g.input(N::Press(C::PlayPause));
+            g.input(N::Release(C::PlayPause));
+            run(&mut g, 1300.);
+            g
+        }
+        let shatter = at(Screen::Game, Kind::Shatterfield.key());
+        let pellets = at(Screen::Game, Kind::PelletRush.key());
+        case!("53b-shatterfield", shatter.clone(), move |ui, m| {
+            ui.accent = teal;
+            m.game_best.shatterfield = 12450;
+            ui.game = Some(Game::new(Kind::Shatterfield, 21));
+        });
+        case!("53c-shatterfield-play", shatter.clone(), move |ui, m| {
+            ui.accent = teal;
+            m.game_best.shatterfield = 12450;
+            ui.game = Some(shatterfield());
+        });
+        case!("53d-shatterfield-over", shatter, move |ui, _| {
+            ui.accent = orange;
+            let mut g = shatterfield();
+            g.phase = Phase::Over;
+            g.score = 4350;
+            ui.game = Some(g);
+        });
+        case!("53e-pellet-rush", pellets.clone(), move |ui, _| {
+            ui.accent = orange;
+            ui.game = Some(Game::new(Kind::PelletRush, 21));
+        });
+        case!("53f-pellet-rush-play", pellets.clone(), move |ui, m| {
+            ui.accent = orange;
+            m.game_best.pellet_rush = 8120;
+            ui.game = Some(pellet_rush());
+        });
+        case!("53g-pellet-rush-paused", pellets, move |ui, _| {
+            ui.accent = teal;
+            let mut g = pellet_rush();
+            g.pause();
+            ui.game = Some(g);
+        });
+    }
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {

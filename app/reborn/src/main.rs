@@ -2898,6 +2898,13 @@ fn run() -> Result<(), String> {
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
         }
+        let game_best = rt.model.game_best;
+        if rt.ui.tick_games(&mut rt.model, Instant::now()) {
+            rt.dirty.mark_render();
+        }
+        if rt.model.game_best != game_best {
+            rt.dirty.mark_persistence();
+        }
         if let Some(effect) = rt.ui.power_hold_complete() {
             if let Err(error) = rt.effect(effect) {
                 rt.fail("power", error);
@@ -2927,6 +2934,12 @@ fn run() -> Result<(), String> {
                 }
                 if !rt.model.screen_off {
                     rt.interaction_hints.interactive();
+                }
+                // The games play with buttons held and released.
+                if rt.ui.game_input(&mut rt.model, event.input) {
+                    rt.last_activity = Instant::now();
+                    rt.dirty.mark_render();
+                    continue;
                 }
                 log.emit(
                     Level::Debug,
