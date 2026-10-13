@@ -99,7 +99,8 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
             }
         }
         Screen::News => Page::rows(crate::news::headline_rows(&ui.news, &m.navigation.filter)),
-        Screen::Games => Page::rows(crate::games::rows(ui, m)),
+        Screen::Games => Page::rows(games(ui, m)),
+        Screen::Doom => crate::doom::page(&ui.doom),
         Screen::Music => Page::rows(vec![
             Item::new("Albums", "albums"),
             Item::new("Artists", "artists"),
@@ -177,6 +178,14 @@ pub fn page(ui: &Ui, m: &AppModel, tracks: &[Track]) -> Page {
         ]),
         _ => Page::default(),
     }
+}
+
+/// Extras > Games: the built-in games, then those whose engines are
+/// installed.
+fn games(ui: &Ui, m: &AppModel) -> Vec<Item> {
+    let mut rows = crate::games::rows(ui, m);
+    rows.extend(crate::doom::games_row(&ui.doom));
+    rows
 }
 
 pub fn output_name(ui: &Ui, m: &AppModel) -> String {

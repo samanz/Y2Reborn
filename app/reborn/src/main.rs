@@ -3,6 +3,7 @@ mod articles;
 mod artwork;
 mod background;
 mod diagnostics;
+mod doom;
 mod graphics_recovery;
 mod news;
 mod performance;
@@ -90,6 +91,8 @@ struct Runtime {
     /// Wi-Fi was blocked at runtime by that policy and must be restored on wake.
     wifi_idle_off: bool,
     wifi_idle_failed: bool,
+    /// Doom: the engine process while a game runs.
+    doom: doom::Doom,
 }
 
 fn sleep_control_allowed(command: &Command) -> bool {
@@ -1528,6 +1531,8 @@ impl Runtime {
                         .arrived(&url, Err("Full stories aren't available".into()));
                 }
             }
+            Effect::DoomStart(iwad) => self.doom_start(iwad),
+            Effect::DoomStop => self.doom_stop(),
         };
         Ok(())
     }
@@ -2028,6 +2033,14 @@ impl Runtime {
         }
     }
 }
+impl Runtime {
+    /// The shortest gap between two frames now: Doom's 35 tics a second need
+    /// more than the UI's usual 34 ms.
+    fn render_gap(&self) -> Duration {
+        Duration::from_millis(if self.doom.playing() { 27 } else { 34 })
+    }
+}
+
 /// Input readiness wakes immediately; the bounded timeout services asynchronous
 /// workers. Dirty frames use a start-to-start budget rather than adding the
 /// entire GPU/presentation cost to a fresh 34-ms delay. A running animation
@@ -2651,8 +2664,11 @@ fn run() -> Result<(), String> {
         sleep_attempt: None,
         wifi_idle_off: false,
         wifi_idle_failed: false,
+        doom: Default::default(),
     };
     rt.ui.news.feeds = news::feeds(&rt.model.sources);
+    // The game engines are separate programs the system may not have.
+    rt.ui.doom.installed = reborn_platform::doom::binary().is_some();
     startup_phase(&log, process_started, "runtime_ready");
     let last_snapshot = Arc::new(Mutex::new(json!({"starting":true})));
     let watcher = last_snapshot.clone();
@@ -2743,6 +2759,7 @@ fn run() -> Result<(), String> {
         })
         .ok()
     };
+    rt.doom.wake = server.notifier().ok();
     let mut player_publish = Instant::now() - Duration::from_secs(1);
     let mut platform_refresh = Instant::now() - Duration::from_secs(30);
     let mut last_platform_screen = rt.model.screen;
@@ -2894,6 +2911,7 @@ fn run() -> Result<(), String> {
         rt.wifi_idle_tick();
         rt.pump_weather();
         rt.pump_news();
+        rt.pump_doom();
         log.heartbeat("ui", 10);
         if rt.ui.observe(&rt.model) | rt.ui.expire_notice() | rt.ui.animating() {
             rt.dirty.mark_render();
@@ -2930,6 +2948,11 @@ fn run() -> Result<(), String> {
                 // The first frame is revealed under the boot cover; input only
                 // counts once the finished UI is fully visible.
                 if rt.boot_fade > 0 || rt.sleep_prepared {
+                    continue;
+                }
+                // While Doom is on screen its buttons are held keys, so they
+                // go to the engine as pressed and released.
+                if rt.doom_input(&event) {
                     continue;
                 }
                 if !rt.model.screen_off {
@@ -3618,10 +3641,7 @@ fn run() -> Result<(), String> {
         } else if checkpoint.elapsed() > Duration::from_secs(15) {
             checkpoint = Instant::now();
         }
-        if rt.dirty.render
-            && !rt.model.screen_off
-            && render_time.elapsed() >= Duration::from_millis(34)
-        {
+        if rt.dirty.render && !rt.model.screen_off && render_time.elapsed() >= rt.render_gap() {
             render_time = Instant::now();
             let frame_started = Instant::now();
             let tracks = std::mem::take(&mut rt.model.library.tracks);
@@ -3743,6 +3763,13 @@ fn run() -> Result<(), String> {
             ),
             render_time.elapsed(),
         );
+        // Doom's frames wake the loop themselves; one waiting for the render
+        // gap is drawn as soon as the gap is over.
+        let interval = if rt.doom.playing() && rt.dirty.render {
+            interval.min(rt.render_gap().saturating_sub(render_time.elapsed()))
+        } else {
+            interval
+        };
         if let Some(input) = &inputs {
             if input.wait_with(interval, Some(server.wake_fd())).is_err() {
                 thread::sleep(interval);

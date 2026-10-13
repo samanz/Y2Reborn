@@ -103,6 +103,15 @@ int main(int argc, char **argv) {
         if (rb_graphics_art(g, art, 0) < 0) return 8;
         free(art);
       }
+    } else if (line[0] == 'P') {
+      int w, h;
+      char file[400];
+      if (sscanf(line + 1, "%d %d %399s", &w, &h, file) == 3) {
+        size_t size;
+        uint8_t *picture = slurp(file, &size);
+        if (rb_graphics_picture(g, picture, w, h) < 0) return 10;
+        free(picture);
+      }
     }
   }
   fclose(quads);

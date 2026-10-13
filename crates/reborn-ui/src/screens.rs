@@ -45,6 +45,8 @@ pub fn draw(ui: &Ui, m: &AppModel, tracks: &[Track], has_art: bool) -> Vec<Quad>
         return c.finish();
     }
     match m.screen {
+        // The game has the whole screen; the buttons are its own.
+        Screen::Doom if ui.doom.playing(m) => crate::doom::draw(&mut c, &ui.doom),
         Screen::NowPlaying if m.current().is_some() => {
             views_playing::now_playing(&mut c, ui, m, tracks, has_art, interactive)
         }
@@ -278,6 +280,7 @@ pub fn screen_title(m: &AppModel) -> String {
         Screen::Game => crate::games::Kind::from_key(&m.navigation.filter)
             .map_or("Games", |k| k.title())
             .into(),
+        Screen::Doom => "Doom".into(),
     }
 }
 

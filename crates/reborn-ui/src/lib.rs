@@ -7,6 +7,7 @@ mod catalog;
 pub mod charge;
 mod components;
 pub mod diagnostics;
+pub mod doom;
 mod flow;
 mod fontdata;
 pub mod games;
@@ -279,6 +280,9 @@ pub struct Ui {
     /// Buttons the game took on press: the rest of each press (long press,
     /// release) is the game's too, even after leaving it.
     game_held: Vec<reborn_core::PhysicalControl>,
+    /// Doom: whether the engine is installed, the games found, the game
+    /// running.
+    pub doom: doom::DoomView,
 }
 
 /// A dialog the player raises by itself.
@@ -1198,10 +1202,13 @@ impl Ui {
             Action::ScreenSleep => return Effect::ScreenSleep,
             Action::ScreenWake => return Effect::ScreenWake,
             Action::PowerShort => {
+                // A game pauses with the screen rather than the player going
+                // to sleep under it.
                 if matches!(
                     m.playback,
                     reborn_core::PlaybackState::Playing | reborn_core::PlaybackState::Buffering
-                ) {
+                ) || self.doom.playing(m)
+                {
                     return Effect::ScreenSleep;
                 }
                 Self::go(m, Screen::Sleep, "");
@@ -1490,6 +1497,9 @@ impl Ui {
         if let Some(kind) = key.strip_prefix("game:").and_then(games::Kind::from_key) {
             self.open_game(m, kind);
             return Effect::None;
+        }
+        if let Some(effect) = self.doom_key(m, key) {
+            return effect;
         }
         if let Some(screen) = route(key) {
             Self::go(m, screen, "");

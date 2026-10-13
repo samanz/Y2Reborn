@@ -62,6 +62,17 @@ def cover(seed: int, size: int = 160, rounded: float = 0.085) -> Image.Image:
     return im
 
 
+def placeholder_picture() -> Image.Image:
+    """Stands in for a game's frame (Tex::Picture): a grey 320x200 checker."""
+    im = Image.new("RGBA", (320, 200), (40, 40, 44, 255))
+    d = ImageDraw.Draw(im)
+    for y in range(0, 200, 20):
+        for x in range(0, 320, 20):
+            if (x + y) // 20 % 2:
+                d.rectangle([x, y, x + 19, y + 19], fill=(70, 70, 76, 255))
+    return im
+
+
 def solve(rows: list[list[float]], rhs: list[float]) -> list[float] | None:
     """Gaussian elimination for the 8x8 perspective system."""
     n = len(rhs)
@@ -85,6 +96,7 @@ class Rasterizer:
         self.fallback = mask_page(root / "assets/fonts/reborn-fallback.a8", 1024)
         self.masks = mask_page(root / "assets/icons/reborn-masks.a8", 512)
         self.covers: dict[int, Image.Image] = {}
+        self.picture = placeholder_picture()
 
     def cover_for(self, key: int, size: int) -> Image.Image:
         if key not in self.covers:
@@ -100,6 +112,8 @@ class Rasterizer:
             return self.cover_for(0, 160)
         if isinstance(tex, dict) and "Thumb" in tex:
             return self.cover_for(tex["Thumb"], 96)
+        if tex == "Picture":
+            return self.picture
         page = (self.regular, self.semibold, self.fallback)[tex["Font"]] if isinstance(tex, dict) else self.masks
         sx, sy, sw, sh = quad["src"]
         layer = Image.new("RGBA", (sw, sh), (255, 255, 255, 255))
@@ -152,6 +166,9 @@ class Rasterizer:
         elif isinstance(tex, dict) and "Thumb" in tex:
             layer = self.cover_for(tex["Thumb"], w).resize((w, h))
             layer.putalpha(ImageChops.multiply(layer.getchannel("A"), Image.new("L", (w, h), tint[3])))
+        elif tex == "Picture":
+            layer = self.picture.resize((w, h), Image.Resampling.BILINEAR)
+            layer.putalpha(Image.new("L", (w, h), tint[3]))
         else:
             if isinstance(tex, dict) and "Font" in tex:
                 page = (self.regular, self.semibold, self.fallback)[tex["Font"]]

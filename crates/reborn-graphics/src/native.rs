@@ -50,6 +50,7 @@ unsafe extern "C" {
     );
     fn rb_graphics_thumb(p: *mut c_void, cx: c_int, cy: c_int, rgba: *const u8) -> c_int;
     fn rb_graphics_art(p: *mut c_void, b: *const u8, collection: c_int) -> c_int;
+    fn rb_graphics_picture(p: *mut c_void, rgba: *const u8, w: c_int, h: c_int) -> c_int;
     fn rb_graphics_test(p: *mut c_void) -> c_int;
     fn rb_graphics_readback(p: *mut c_void, pixels: *mut u8) -> c_int;
     fn rb_graphics_present(p: *mut c_void) -> c_int;
@@ -207,6 +208,7 @@ impl Renderer {
                     Tex::Mask => (4, q.src),
                     Tex::Art => (5, [0; 4]),
                     Tex::CollectionArt => (6, [0; 4]),
+                    Tex::Picture => (8, [0; 4]),
                     Tex::Thumb(key) => match self.thumbs.get_mut(&key) {
                         Some(slot) => {
                             slot.used = self.frame;
@@ -401,6 +403,22 @@ impl Renderer {
         self.log.add("artwork_uploads", 1.);
         if r < 0 {
             Err(format!("texture upload {r}"))
+        } else {
+            Ok(())
+        }
+    }
+    /// Replace the `Tex::Picture` image with `w` x `h` RGBA (up to 1024 on
+    /// a side). Same-size updates reuse the texture's storage.
+    pub fn picture(&mut self, rgba: &[u8], w: usize, h: usize) -> Result<(), String> {
+        if w == 0 || h == 0 || w > 1024 || h > 1024 || rgba.len() != w * h * 4 {
+            return Err("picture dimensions".into());
+        }
+        // SAFETY: exact RGBA dimensions validated; GL synchronously copies slice into owned texture.
+        let r = unsafe {
+            rb_graphics_picture(self.raw.as_ptr(), rgba.as_ptr(), w as c_int, h as c_int)
+        };
+        if r < 0 {
+            Err(format!("picture upload {r}"))
         } else {
             Ok(())
         }

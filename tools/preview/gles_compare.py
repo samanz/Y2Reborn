@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_previews import HEIGHT, WIDTH, Rasterizer  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-TEX = {"Solid": 0, "Mask": 4, "Art": 5, "CollectionArt": 6}
+TEX = {"Solid": 0, "Mask": 4, "Art": 5, "CollectionArt": 6, "Picture": 8}
 
 
 def cell_bytes(image: Image.Image) -> bytes:
@@ -39,7 +39,7 @@ def cell_bytes(image: Image.Image) -> bytes:
 
 def render_native(harness: Path, raster: Rasterizer, quads: list[dict], work: Path) -> Image.Image:
     lines, cells = [], {}
-    art = collection = False
+    art = collection = picture = False
     for q in quads:
         tex = q.get("tex", "Solid")
         if isinstance(tex, dict) and "Thumb" in tex:
@@ -66,6 +66,11 @@ def render_native(harness: Path, raster: Rasterizer, quads: list[dict], work: Pa
                 path.write_bytes(raster.cover_for(0, 160).tobytes())
                 lines.insert(0, f"C {path}")
                 collection = True
+            if kind == 8 and not picture:
+                path = work / "picture.rgba"
+                path.write_bytes(raster.picture.tobytes())
+                lines.insert(0, f"P {raster.picture.width} {raster.picture.height} {path}")
+                picture = True
         if q.get("warp"):
             corners = " ".join(f"{v}" for point in q["warp"]["corners"] for v in point)
             colors = " ".join(str(c) for c in q["warp"]["colors"])

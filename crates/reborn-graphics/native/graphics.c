@@ -117,9 +117,10 @@ typedef struct {
   EGLContext context;
   /* Texture slots, in the order the product UI names them (see rb_graphics_quad):
    * 0 white, 1..3 glyph pages, 4 shape/icon masks, 5 artwork, 6 collection
-   * artwork, 7 thumbnail atlas. Every sampled size is kept for UV scaling. */
-  GLuint program, vbo, tex[8];
-  int tex_w[8], tex_h[8];
+   * artwork, 7 thumbnail atlas, 8 the picture (a game's frame). Every sampled
+   * size is kept for UV scaling. */
+  GLuint program, vbo, tex[9];
+  int tex_w[9], tex_h[9];
   struct flip flip;
   /* Bounded adjacent-texture batching, preserving the original draw order. */
   GLfloat vertices[256 * 6 * RB_VERTEX];
@@ -173,7 +174,7 @@ void rb_graphics_close(RbGraphics *g) {
       glDeleteProgram(g->program);
     if (g->vbo)
       glDeleteBuffers(1, &g->vbo);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 9; i++)
       if (g->tex[i])
         glDeleteTextures(1, &g->tex[i]);
   }
@@ -325,12 +326,15 @@ static int gl_setup(RbGraphics *g, const uint8_t *const font_pages[3],
   g->tex[7] = texture(RB_THUMB_W, RB_THUMB_H, NULL);
   g->tex_w[7] = RB_THUMB_W;
   g->tex_h[7] = RB_THUMB_H;
-  for (int i = 5; i < 8; i++) {
+  /* A game's frame: replaced by rb_graphics_picture, any size. */
+  g->tex[8] = texture(1, 1, white);
+  g->tex_w[8] = g->tex_h[8] = 1;
+  for (int i = 5; i < 9; i++) {
     glBindTexture(GL_TEXTURE_2D, g->tex[i]);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   }
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < 9; i++)
     if (!g->tex[i])
       return -EIO;
   if (glGetError() != GL_NO_ERROR)
@@ -500,7 +504,7 @@ void rb_graphics_begin(RbGraphics *g) {
   glClear(GL_COLOR_BUFFER_BIT);
 }
 /* `tex` selects the texture (0 white, 1..3 glyph pages, 4 masks, 5 artwork,
- * 6 collection artwork, 7 thumbnails); (sx, sy, sw, sh) is the source rectangle
+ * 6 collection artwork, 7 thumbnails, 8 the picture); (sx, sy, sw, sh) is the source rectangle
  * in texels of a mask/glyph/thumbnail texture and is ignored otherwise. */
 /* Texture-space source rectangle (u, v, uw, vh) for `tex`. */
 static void source_uv(RbGraphics *g, int tex, int sx, int sy, int sw, int sh,
@@ -514,7 +518,7 @@ static void source_uv(RbGraphics *g, int tex, int sx, int sy, int sw, int sh,
   }
 }
 static int begin_quad(RbGraphics *g, int tex) {
-  if (tex < 0 || tex > 7)
+  if (tex < 0 || tex > 8)
     return 0;
   GLuint t = g->tex[tex];
   if (g->vertices_used &&
@@ -602,6 +606,22 @@ int rb_graphics_thumb(RbGraphics *g, int cx, int cy, const uint8_t *rgba) {
   glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
   glTexSubImage2D(GL_TEXTURE_2D, 0, cx * 98, cy * 98, 98, 98, GL_RGBA,
                   GL_UNSIGNED_BYTE, rgba);
+  return glGetError() == GL_NO_ERROR ? 0 : -EIO;
+}
+/* Replace the picture with w x h RGBA; same-size updates reuse the storage. */
+int rb_graphics_picture(RbGraphics *g, const uint8_t *rgba, int w, int h) {
+  if (w <= 0 || h <= 0 || w > 1024 || h > 1024)
+    return -EINVAL;
+  glBindTexture(GL_TEXTURE_2D, g->tex[8]);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  if (w == g->tex_w[8] && h == g->tex_h[8])
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE,
+                    rgba);
+  else
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, rgba);
+  g->tex_w[8] = w;
+  g->tex_h[8] = h;
   return glGetError() == GL_NO_ERROR ? 0 : -EIO;
 }
 int rb_graphics_art(RbGraphics *g, const uint8_t *p, int collection) {

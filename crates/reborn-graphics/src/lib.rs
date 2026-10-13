@@ -21,6 +21,9 @@ pub enum Tex {
     /// A library thumbnail (96x96) identified by an opaque key; the renderer
     /// maps it to an atlas cell and skips it until its pixels are resident.
     Thumb(u64),
+    /// A picture of any size replaced often (a game's frame, see
+    /// [`Renderer::picture`]), sampled whole with linear filtering.
+    Picture,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

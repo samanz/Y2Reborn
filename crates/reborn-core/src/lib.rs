@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 pub mod cities;
+pub mod doom;
 pub mod news;
 pub mod platform;
 pub mod weather;
@@ -382,10 +383,14 @@ pub enum Screen {
     News,
     /// One story in the reader (the filter holds its index in the headlines).
     NewsStory,
-    /// Extras > Games: the games built into Reborn.
+    /// Extras > Games: the games built into Reborn, then those whose engine
+    /// the system has installed.
     Games,
     /// One game; the navigation filter holds its key.
     Game,
+    /// Games > Doom (only with the engine installed): the games found (a
+    /// picker), then the game itself.
+    Doom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -690,6 +695,10 @@ pub enum Effect {
     NewsFetch(String),
     /// The full story at this link, from the saved copy or the web.
     NewsArticle(String),
+    /// Doom: start the engine with this IWAD.
+    DoomStart(PathBuf),
+    /// Doom: leave the game (the engine quits).
+    DoomStop,
 }
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {

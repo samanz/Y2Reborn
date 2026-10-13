@@ -5,6 +5,7 @@ pub mod bluetooth;
 pub mod client;
 pub mod codecs;
 pub mod contract;
+pub mod doom;
 mod https;
 pub mod input;
 pub mod kernel_events;

@@ -846,6 +846,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ui.game = Some(g);
         });
     }
+    // Doom: only with the engine installed. The game's picture is the
+    // rasteriser's stand-in; no game data is drawn.
+    let doom = |ui: &mut Ui| {
+        ui.doom.installed = true;
+        ui.doom.wads = ["freedoom1.wad", "freedoom2.wad"]
+            .iter()
+            .filter_map(|f| reborn_core::doom::game(format!("/media/sd/Doom/{f}").into(), b"IWAD"))
+            .collect();
+    };
+    case!("53h-games-doom", at(Screen::Games, ""), move |ui, m| {
+        doom(ui);
+        ui.accent = teal;
+        m.navigation.focus = 2;
+    });
+    case!("53i-doom", at(Screen::Doom, ""), move |ui, _| doom(ui));
+    case!("53j-doom-no-games", at(Screen::Doom, ""), |ui, _| {
+        ui.doom.installed = true;
+    });
+    case!("53k-doom-starting", at(Screen::Doom, ""), move |ui, m| {
+        doom(ui);
+        ui.model_action(m, Action::Select);
+    });
+    case!("53l-doom-playing", at(Screen::Doom, ""), move |ui, m| {
+        doom(ui);
+        ui.model_action(m, Action::Select);
+        ui.doom.frame = true;
+    });
 
     let mut manifest = vec![];
     let write = |name: &str, quads: &[reborn_graphics::Quad], focus: usize| {
